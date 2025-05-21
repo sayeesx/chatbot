@@ -1,0 +1,49 @@
+{
+  "name": "Sayees",
+  "role": "Aspiring AI & Data Science Professional",
+  "age": 20,
+  "birth": {
+    "year": 2004,
+    "place": "Kottakkal, Malappuram District, Kerala, India"
+  },
+  "location": {
+    "current": "Mangaluru, Karnataka, India",
+    "hometown": "Kottakkal, Malappuram District, Kerala, India"
+  },
+  "headline": "A passionate BCA student specializing in Artificial Intelligence and Data Science",
+  "interests": ["Artificial Intelligence", "Data Science", "Machine Learning", "Programming"],
+  "languages": ["English", "Malayalam", "Hindi"],
+  "education": {
+    "current": {
+      "degree": "Bachelor of Computer Applications (BCA)",
+      "specialization": "Artificial Intelligence and Data Science",
+      "college": "Yenepoya College of Science",
+      "university": "Yenepoya University",
+      "location": "Mangaluru",
+      "year": "Current",
+      "achievements": ["ACHIEVEMENT_1", "ACHIEVEMENT_2"]
+    },
+    "previous": [
+      {
+        "level": "High School",
+        "school": "Kottakkal",
+        "year": "2023"
+      }
+    ]
+  },
+  "soft_skills": ["Problem Solving", "Team Collaboration", "Communication"],
+  "tools": ["Jupyter Notebook", "TensorFlow", "TOOL_3"],
+  "projects": [
+    {
+      "name": "Exquio",
+      "description": "Doctor appointment booking system using AI",
+      "technologies": ["Python", "React native", "Supabase"],
+      "link": ""
+    }
+  ],
+  "contact": {
+    "email": "Confidential, please use the contact form",
+    "linkedin": "https://linkedin.com/in/sayees",
+    "github": "https://github.com/sayees"
+  }
+}
