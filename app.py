@@ -2,13 +2,13 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)
+CORS(app)  # Allow cross-origin requests
 
 @app.route('/')
 def home():
     return 'SayeesBot is online!'
 
-@app.route('/chatbot', methods=['POST'])  # ✅ This must be POST
+@app.route('/chatbot', methods=['POST'])  # ✅ This enables POST on /chatbot
 def chatbot():
     data = request.get_json()
     message = data.get('message', '')
@@ -19,3 +19,6 @@ def chatbot():
         return jsonify({'response': "I'm SayeesBot, your AI assistant!"})
     else:
         return jsonify({'response': f"You said: {message}"})
+
+if __name__ == '__main__':
+    app.run(debug=True)
