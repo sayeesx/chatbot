@@ -1,25 +1,11 @@
-# chatbot.py (updated for Flask integration)
 import json
-import re
 import difflib
 from datetime import datetime
 import random
-from flask import Flask, request, jsonify
-from flask_cors import CORS
 
-# Initialize Flask app
-app = Flask(__name__)
-CORS(app)
-
-# Load Sayees' data
+# Load portfolio data
 with open('sayees_data.json') as f:
     data = json.load(f)
-
-# Configuration
-SPELLING_SENSITIVITY = 0.7
-CONFIDENCE_THRESHOLD = 0.6
-GREETINGS = ["hi", "hello", "hey", "greetings", "howdy"]
-FAREWELLS = ["bye", "goodbye", "see you", "later", "farewell"]
 
 
 class PortfolioBot:
@@ -58,12 +44,9 @@ class PortfolioBot:
             if word in self.misspellings:
                 corrected.append(self.misspellings[word])
             else:
-                matches = difflib.get_close_matches(word, self.keyword_map.keys(), n=1, cutoff=SPELLING_SENSITIVITY)
+                matches = difflib.get_close_matches(word, self.keyword_map.keys(), n=1, cutoff=0.7)
                 corrected.append(matches[0] if matches else word)
         return ' '.join(corrected)
-
-    def _calculate_similarity(self, a, b):
-        return difflib.SequenceMatcher(None, a, b).ratio()
 
     def _time_based_greeting(self):
         hour = datetime.now().hour
@@ -73,7 +56,7 @@ class PortfolioBot:
             return "Good afternoon!"
         return "Good evening!"
 
-    # Response handlers (kept the same as your original implementation)
+    # Response handlers
     def _respond_name(self):
         responses = [
             f"I'm Sayees, an aspiring AI & Data Science professional.",
@@ -98,63 +81,64 @@ class PortfolioBot:
 
     def _respond_education(self):
         edu = data["education"]["current"]
-        responses = [
-            f"I'm currently pursuing {edu['degree']} with specialization in {edu['specialization']} at {edu['college']}, {edu['university']}.",
-            f"My current academic pursuit is {edu['degree']} with focus on {edu['specialization']} from {edu['college']}, {edu['university']}.",
-            f"I'm enrolled in the {edu['degree']} program specializing in {edu['specialization']} at {edu['college']}."
-        ]
-        return random.choice(responses)
+        return random.choice([
+            f"I'm pursuing {edu['degree']} specializing in {edu['specialization']} at {edu['college']}.",
+            f"My current focus is {edu['degree']} with specialization in {edu['specialization']}.",
+            f"I'm enrolled in {edu['degree']} at {edu['college']}, {edu['university']}."
+        ])
 
     def _respond_interests(self):
         interests = ', '.join(data['interests'][:-1]) + ', and ' + data['interests'][-1]
-        return random.choice([
-            f"I'm particularly interested in: {interests}.",
-            f"My professional interests include: {interests}.",
-            f"I'm passionate about several areas: {interests}."
-        ])
+        return f"My interests include: {interests}."
 
     def _respond_languages(self):
         languages = ', '.join(data['languages'][:-1]) + ', and ' + data['languages'][-1]
-        return random.choice([
-            f"I'm comfortable communicating in {languages}.",
-            f"I can speak {languages}.",
-            f"My language skills include {languages}."
-        ])
+        return f"I'm proficient in: {languages}."
 
     def _respond_skills(self):
         skills = ', '.join(data['soft_skills'][:-1]) + ', and ' + data['soft_skills'][-1]
-        return random.choice([
-            f"My interpersonal skills include: {skills}.",
-            f"I've developed several soft skills: {skills}.",
-            f"In terms of professional skills, I excel at: {skills}."
-        ])
+        return f"My skills include: {skills}."
 
     def _respond_tools(self):
         tools = ', '.join(data['tools'][:-1]) + ', and ' + data['tools'][-1]
-        return random.choice([
-            f"In my work, I regularly use tools like: {tools}.",
-            f"My technical toolkit includes: {tools}.",
-            f"I'm proficient with several platforms: {tools}."
-        ])
+        return f"I work with: {tools}."
 
     def _respond_project(self):
         proj = data["projects"][0]
         tech = ', '.join(proj['technologies'][:-1]) + ', and ' + proj['technologies'][-1]
-        return random.choice([
-            f"One notable project I worked on is {proj['name']} – {proj['description']}, where I utilized {tech}.",
-            f"I developed {proj['name']}, which {proj['description']}. This project involved working with {tech}.",
-            f"Among my projects, {proj['name']} stands out. It's {proj['description']} built using {tech}."
-        ])
+        return f"I developed {proj['name']} - {proj['description']} using {tech}."
 
     def _respond_contact(self):
-        return random.choice([
-            f"Let's connect! You can reach me on LinkedIn: {data['contact']['linkedin']} or check out my GitHub: {data['contact']['github']}.",
-            f"I'd love to connect with you. Find me on LinkedIn at {data['contact']['linkedin']} or explore my code on GitHub at {data['contact']['github']}.",
-            f"For professional inquiries, message me on LinkedIn ({data['contact']['linkedin']}) or check out my GitHub repositories ({data['contact']['github']})."
-        ])
+        return f"Connect with me on LinkedIn: {data['contact']['linkedin']} or GitHub: {data['contact']['github']}"
 
     def _respond_help(self):
-        return "I can tell you about Sayees' education, skills, projects, interests, and contact information. What would you like to know?"
+        return "Ask me about my education, skills, projects, or contact information."
+
+    def process_input(self, user_input):
+        user_input = user_input.lower().strip()
+        user_input = self._correct_spelling(user_input)
+
+        # Check greetings
+        if any(g in user_input for g in ["hi", "hello", "hey"]):
+            return f"{self._time_based_greeting()} I'm Sayees' portfolio assistant. How can I help?"
+
+        # Check farewells
+        if any(f in user_input for f in ["bye", "goodbye"]):
+            return "Nice chatting! Feel free to ask more questions anytime."
+
+        # Find best matching handler
+        best_score = 0
+        best_handler = None
+
+        for pattern, handler in self.keyword_map.items():
+            for keyword in pattern.split('|'):
+                if keyword in user_input:
+                    score = difflib.SequenceMatcher(None, keyword, user_input).ratio()
+                    if score > best_score:
+                        best_score = score
+                        best_handler = handler
+
+        return best_handler() if best_score > 0.6 else "I can tell you about my education, skills, or projects. What would you like to know?"
 
     def _respond_greeting(self):
         return random.choice([

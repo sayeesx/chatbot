@@ -4,7 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ae4d592d-8094-4294-81ce-cc9af50d3cc3" name="Changes" comment="bot is online">
+    <list default="true" id="ae4d592d-8094-4294-81ce-cc9af50d3cc3" name="Changes" comment="deleted app.py and sayees_data renamed from data.json">
+      <change afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/chatbot.py" beforeDir="false" afterPath="$PROJECT_DIR$/chatbot.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -161,13 +163,22 @@
       <option name="project" value="LOCAL" />
       <updated>1747910212683</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="deleted app.py and sayees_data renamed from data.json">
+      <option name="closed" value="true" />
+      <created>1747910561071</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1747910561071</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="hi" />
     <MESSAGE value="messege" />
     <MESSAGE value="bot is online" />
-    <option name="LAST_COMMIT_MESSAGE" value="bot is online" />
+    <MESSAGE value="deleted app.py and sayees_data renamed from data.json" />
+    <option name="LAST_COMMIT_MESSAGE" value="deleted app.py and sayees_data renamed from data.json" />
   </component>
 </project>
