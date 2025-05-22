@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ae4d592d-8094-4294-81ce-cc9af50d3cc3" name="Changes" comment="messege">
+    <list default="true" id="ae4d592d-8094-4294-81ce-cc9af50d3cc3" name="Changes" comment="bot is online">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/chatbot.py" beforeDir="false" afterPath="$PROJECT_DIR$/chatbot.py" afterDir="false" />
     </list>
@@ -114,11 +114,29 @@
       <option name="project" value="LOCAL" />
       <updated>1747827385948</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="messege">
+      <option name="closed" value="true" />
+      <created>1747909557906</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1747909557906</updated>
+    </task>
+    <task id="LOCAL-00005" summary="bot is online">
+      <option name="closed" value="true" />
+      <created>1747909641352</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1747909641352</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="hi" />
-    <option name="LAST_COMMIT_MESSAGE" value="hi" />
+    <MESSAGE value="messege" />
+    <MESSAGE value="bot is online" />
+    <option name="LAST_COMMIT_MESSAGE" value="bot is online" />
   </component>
 </project>

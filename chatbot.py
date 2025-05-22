@@ -1,41 +1,42 @@
+# chatbot.py (updated for Flask integration)
 import json
 import re
 import difflib
 from datetime import datetime
 import random
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+
+# Initialize Flask app
+app = Flask(__name__)
+CORS(app)
 
 # Load Sayees' data
 with open('data.json') as f:
     data = json.load(f)
 
 # Configuration
-SPELLING_SENSITIVITY = 0.7  # How close misspellings need to be to match
-CONFIDENCE_THRESHOLD = 0.6  # Minimum confidence to respond to a query
+SPELLING_SENSITIVITY = 0.7
+CONFIDENCE_THRESHOLD = 0.6
 GREETINGS = ["hi", "hello", "hey", "greetings", "howdy"]
 FAREWELLS = ["bye", "goodbye", "see you", "later", "farewell"]
-
-# Common misspellings mapping
-MISSPELLINGS = {
-    "exquio": "exquio",
-    "sayees": "sayees",
-    "linkedin": "linkedin",
-    "github": "github",
-    "data science": "data science"
-}
 
 
 class PortfolioBot:
     def __init__(self):
-        self.name = "Sayees' Portfolio Assistant"
+        self.name = "SayeesBot"
         self.last_interaction = None
-        self.context = None
         self.conversation_history = []
-
-        # Preprocess data for better matching
         self.keyword_map = self._build_keyword_map()
+        self.misspellings = {
+            "exquio": "exquio",
+            "sayees": "sayees",
+            "linkedin": "linkedin",
+            "github": "github",
+            "data science": "data science"
+        }
 
     def _build_keyword_map(self):
-        """Create a map of keywords to responses"""
         return {
             "name": self._respond_name,
             "from|hometown|grew up": self._respond_hometown,
@@ -51,32 +52,28 @@ class PortfolioBot:
         }
 
     def _correct_spelling(self, text):
-        """Handle common misspellings"""
         words = text.split()
         corrected = []
         for word in words:
-            if word in MISSPELLINGS:
-                corrected.append(MISSPELLINGS[word])
+            if word in self.misspellings:
+                corrected.append(self.misspellings[word])
             else:
-                # Find close matches for other words
                 matches = difflib.get_close_matches(word, self.keyword_map.keys(), n=1, cutoff=SPELLING_SENSITIVITY)
                 corrected.append(matches[0] if matches else word)
         return ' '.join(corrected)
 
     def _calculate_similarity(self, a, b):
-        """Calculate similarity between two strings"""
         return difflib.SequenceMatcher(None, a, b).ratio()
 
-    def _get_current_time_greeting(self):
-        """Return appropriate greeting based on time of day"""
+    def _time_based_greeting(self):
         hour = datetime.now().hour
         if hour < 12:
             return "Good morning!"
         elif hour < 17:
             return "Good afternoon!"
-        else:
-            return "Good evening!"
+        return "Good evening!"
 
+    # Response handlers (kept the same as your original implementation)
     def _respond_name(self):
         responses = [
             f"I'm Sayees, an aspiring AI & Data Science professional.",
@@ -161,7 +158,7 @@ class PortfolioBot:
 
     def _respond_greeting(self):
         return random.choice([
-            f"{self._get_current_time_greeting()} I'm Sayees' portfolio assistant. How can I help you today?",
+            f"{self._time_based_greeting()} I'm Sayees' portfolio assistant. How can I help you today?",
             "Hello! I'm here to share information about Sayees' professional background. What would you like to know?",
             "Hi there! I can tell you about Sayees' skills, education, and projects. How can I assist you?"
         ])
@@ -182,14 +179,10 @@ class PortfolioBot:
 
     def process_input(self, user_input):
         """Process user input and generate appropriate response"""
-        # Clean and normalize input
         user_input = user_input.lower().strip()
         original_input = user_input
-
-        # Correct common misspellings
         user_input = self._correct_spelling(user_input)
 
-        # Store conversation history
         self.conversation_history.append(("user", original_input))
 
         # Check for greetings
@@ -216,36 +209,65 @@ class PortfolioBot:
                         highest_score = score
                         best_match = handler
 
-        # Generate response based on best match
-        if best_match and highest_score >= CONFIDENCE_THRESHOLD:
-            response = best_match()
-        else:
-            response = self._respond_default()
+        response = best_match() if best_match and highest_score >= CONFIDENCE_THRESHOLD else self._respond_default()
 
         self.conversation_history.append(("bot", response))
         self.last_interaction = datetime.now()
-
         return response
 
 
-# Initialize the bot
+# Initialize the bot instance
 bot = PortfolioBot()
 
 
+# Flask API endpoints
+@app.route('/')
+def home():
+    return jsonify({
+        "status": "online",
+        "bot_name": bot.name,
+        "last_interaction": bot.last_interaction.isoformat() if bot.last_interaction else None
+    })
+
+
+@app.route('/chatbot', methods=['POST'])
+def chatbot():
+    request_data = request.get_json()
+    message = request_data.get('message', '').strip()
+
+    if not message:
+        return jsonify({"error": "No message provided"}), 400
+
+    try:
+        response = bot.process_input(message)
+        return jsonify({
+            "response": response,
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "response": "I encountered an error processing your request. Please try again."
+        }), 500
+
+
+# Command line interface (for testing)
 def chat_interface():
     print(f"{bot.name} initialized. Type 'quit' to exit.")
     print(bot._respond_greeting())
 
     while True:
         user_input = input("\nYou: ").strip()
-
         if user_input.lower() in ['quit', 'exit']:
             print(f"Bot: {bot._respond_farewell()}")
             break
-
         response = bot.process_input(user_input)
         print(f"Bot: {response}")
 
-# Uncomment to run in interactive mode
-# if __name__ == "__main__":
-#     chat_interface()
+
+if __name__ == '__main__':
+    # Run the Flask app by default
+    app.run(debug=True)
+
+    # To run in CLI mode instead:
+    # chat_interface()
