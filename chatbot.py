@@ -12,7 +12,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Load Sayees' data
-with open('data.json') as f:
+with open('sayees_data.json') as f:
     data = json.load(f)
 
 # Configuration
