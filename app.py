@@ -6,7 +6,7 @@ CORS(app)  # Allow cross-origin requests
 
 @app.route('/')
 def home():
-    return 'SayeesBot is online!'
+    return 'Bot is online!'
 
 @app.route('/chatbot', methods=['POST'])  # ✅ This enables POST on /chatbot
 def chatbot():
