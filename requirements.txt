@@ -1,3 +1,6 @@
 Flask
 flask-cors
 gunicorn
+flask
+flask-cors
+waitress

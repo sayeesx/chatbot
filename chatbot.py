@@ -1,14 +1,13 @@
+import os
 import json
 import difflib
 from datetime import datetime
 import random
 
-
 class PortfolioBot:
     def __init__(self):
         """Initialize the bot with portfolio data and configuration"""
-        with open('sayees_data.json') as f:
-            self.data = json.load(f)
+        self.data = self.load_data()
 
         self.name = "SayeesBot"
         self.last_interaction = None
@@ -40,6 +39,20 @@ class PortfolioBot:
         # To track last topic asked to vary responses
         self.last_response_type = None
         self.response_counters = {}
+
+    def load_data(self):
+        """Load portfolio data from environment variable or JSON file"""
+        env_data = os.getenv("S_DATA_JSON")
+        if env_data:
+            try:
+                return json.loads(env_data)
+            except json.JSONDecodeError:
+                print("Warning: Failed to parse S_DATA_JSON environment variable, falling back to file.")
+        with open("sayees_data.json", "r") as f:
+            return json.load(f)
+
+    # ... rest of your class code unchanged ...
+
 
     def _build_keyword_map(self):
         """Create mapping of keywords to response handlers"""
