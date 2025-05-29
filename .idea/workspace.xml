@@ -4,7 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ae4d592d-8094-4294-81ce-cc9af50d3cc3" name="Changes" comment="60% working need to refine, but almost there">
+    <list default="true" id="ae4d592d-8094-4294-81ce-cc9af50d3cc3" name="Changes" comment="hid date json for security and privacy">
+      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -199,7 +200,15 @@
       <option name="project" value="LOCAL" />
       <updated>1747916482739</updated>
     </task>
-    <option name="localTasksCounter" value="11" />
+    <task id="LOCAL-00011" summary="hid date json for security and privacy">
+      <option name="closed" value="true" />
+      <created>1748509685456</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1748509685456</updated>
+    </task>
+    <option name="localTasksCounter" value="12" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -210,6 +219,7 @@
     <MESSAGE value="new. fixed errors" />
     <MESSAGE value="final test" />
     <MESSAGE value="60% working need to refine, but almost there" />
-    <option name="LAST_COMMIT_MESSAGE" value="60% working need to refine, but almost there" />
+    <MESSAGE value="hid date json for security and privacy" />
+    <option name="LAST_COMMIT_MESSAGE" value="hid date json for security and privacy" />
   </component>
 </project>
