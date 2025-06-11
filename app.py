@@ -43,6 +43,10 @@ async def chatbot():
 
 # Required for Gunicorn
 if __name__ == '__main__':
-    app.run(debug=True)
-else:
-    application = app
+    from hypercorn.config import Config
+    from hypercorn.asyncio import serve
+    import asyncio
+
+    config = Config()
+    config.bind = ["localhost:5000"]
+    asyncio.run(serve(app, config))
