@@ -3,7 +3,7 @@ services:
     name: chatbot-api
     env: python
     buildCommand: ./build.sh
-    startCommand: gunicorn app:asgi_app -k uvicorn.workers.UvicornWorker
+    startCommand: python app.py
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.18
