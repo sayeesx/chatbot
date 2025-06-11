@@ -46,7 +46,7 @@ async def chatbot():
 # Convert WSGI app to ASGI
 asgi_app = WsgiToAsgi(app)
 
-# Required for Gunicorn
+# Don't run the server when imported by Gunicorn
 if __name__ == '__main__':
     import uvicorn
     port = int(os.environ.get("PORT", 5000))
