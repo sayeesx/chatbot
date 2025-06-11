@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from chatbot import PortfolioBot
+import asyncio
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -20,7 +21,7 @@ def home():
 
 
 @app.route('/chatbot', methods=['POST'])
-def chatbot():
+async def chatbot():
     data = request.get_json()
     message = data.get('message', '').strip()
 
@@ -28,7 +29,7 @@ def chatbot():
         return jsonify({"error": "No message provided"}), 400
 
     try:
-        response = bot.process_input(message)
+        response = await bot.process_input(message)
         return jsonify({
             "response": response,
             "status": "success"

@@ -1,0 +1,158 @@
+{
+  "name": "Muhammed Sayees",
+  "role": "Software Developer | AI & ML Engineer",
+  "age": 20,
+  "birth": {
+    "year": 2004,
+    "place": "Kottakkal, Malappuram District, Kerala, India"
+  },
+  "location": {
+    "current": "Mangaluru, Karnataka, India",
+    "hometown": "Kottakkal, Malappuram District, Kerala, India"
+  },
+  "headline": "Focused and driven Software Developer and AI/ML Engineer with 1 year of hands-on experience in AI and Data Science.",
+  "bio": "I'm Muhammed Sayees, a BCA student at Yenepoya University with a passion for AI, data science, and building scalable solutions. With hands-on experience in machine learning, web development, and automation, I aim to make a meaningful impact in the tech industry through intelligent systems and innovative digital platforms.",
+  "interests": [
+    "Artificial Intelligence",
+    "Machine Learning",
+    "Deep Learning",
+    "Data Science",
+    "Web Development",
+    "Mobile App Development",
+    "Startups",
+    "UI/UX Design",
+    "Stock Market",
+    "Crypto",
+    "Forex Trading"
+  ],
+  "languages": ["English", "Malayalam", "Hindi"],
+  "education": {
+    "current": {
+      "degree": "Bachelor of Computer Applications (BCA)",
+      "specialization": "Artificial Intelligence and Data Science",
+      "college": "Yenepoya College of Science",
+      "university": "Yenepoya University",
+      "location": "Mangaluru, Karnataka",
+      "year": "2023–2026",
+      "achievements": [
+        "Intern at Cyber Square",
+        "Launched a portfolio website using Next.js",
+        "Developed a student complaint registration portal"
+      ]
+    },
+    "previous": [
+      {
+        "level": "High School",
+        "school": "Kottakkal",
+        "year": "2023"
+      }
+    ]
+  },
+  "experience": [
+    {
+      "position": "AI & Data Science Developer Intern",
+      "company": "Cyber Square",
+      "duration": "Oct 2023 – May 2025",
+      "location": "Remote",
+      "description": [
+        "Built automation scripts to streamline data workflows and improve efficiency",
+        "Used Git and GitHub for version control and collaboration",
+        "Integrated external libraries and tools based on project needs",
+        "Worked on real-world development problems in a team environment"
+      ]
+    }
+  ],
+  "certifications": [
+    "Hugging Face MCP Certification",
+    "Infosys Artificial Intelligence",
+    "AWS Infosys AI Certification",
+    "HP Data Science and Analytics",
+    "Accenture Data Analytics and Visualization Job Simulation",
+    "Python Bootcamp by NSDC",
+    "SEBI Investor Certification (NISM & SEBI)",
+    "Intel AI for All Program",
+    "Intel AI for Entrepreneurship",
+    "One RoadMap AI Engineer"
+  ],
+  "soft_skills": [
+    "Problem Solving",
+    "Team Collaboration",
+    "Communication",
+    "Creative Thinking",
+    "Self-Motivation",
+    "Entrepreneurial Thinking"
+  ],
+  "technical_skills": [
+    "Python",
+    "C",
+    "C++",
+    "SQL",
+    "JavaScript",
+    "React Native",
+    "Next.js",
+    "Node.js",
+    "Express.js",
+    "HTML",
+    "CSS",
+    "Tailwind CSS",
+    "Firebase",
+    "Supabase",
+    "MySQL",
+    "Docker"
+  ],
+  "tools": [
+    "Git",
+    "GitHub",
+    "VS Code",
+    "Figma",
+    "Postman",
+    "TensorFlow",
+    "Jupyter Notebook",
+    "Expo CLI"
+  ],
+  "projects": [
+    {
+      "name": "Exquio",
+      "description": "A cross-platform doctor appointment app with user/admin dashboards, an AI Lab Report Analyzer, and an AI Receptionist chatbot for symptom-based doctor recommendations.",
+      "technologies": ["React Native", "Supabase", "Python", "AI", "NLP"],
+      "link": ""
+    },
+    {
+      "name": "Roamio",
+      "description": "Travel Guide Platform: Connected travelers with local guides for personalized experiences using Next.js and Supabase. Included user auth, booking, real-time chat, ML-based guide matching, and AI-generated travel plans.",
+      "technologies": ["Next.js", "Supabase", "MySQL", "Java", "Machine Learning", "AI"],
+      "link": "https://github.com/sayeesx/resend-nextjs-pages-router-example"
+    },
+    {
+      "name": "Campus Portal",
+      "description": "College Event Booking and Complaint Management System with real-time fest registration, AI-based QR ticketing, ML complaint prioritization, and an AI summarizer for efficient admin response.",
+      "technologies": ["React", "Node.js", "MongoDB", "AI", "ML", "QR Tech", "Analytics"],
+      "link": ""
+    },
+    {
+      "name": "Portfolio Website",
+      "description": "A personal portfolio site built with Next.js, Tailwind CSS, and Framer Motion. Showcases Sayees' work, skills, and includes an embedded AI chatbot powered by Model Context Protocol (MCP).",
+      "technologies": ["Next.js", "Tailwind CSS", "Framer Motion", "AI", "MCP"],
+      "link": "https://sayees.vercel.app"
+    },
+    {
+      "name": "SayeesBot (AI Chatbot)",
+      "description": "An AI chatbot embedded in personal portfolio. Trained on resume and project data to provide intelligent responses and resume insights using Model Context Protocol (MCP).",
+      "technologies": ["Python", "Flask", "MCP", "JSON", "NLP"],
+      "link": ""
+    }
+  ],
+  "trading_experience": {
+    "years": 2,
+    "domains": ["Stock Market", "Cryptocurrency", "Forex"],
+    "role": "Independent Investor & Trader"
+  },
+  "fonts": ["DM Sans", "Inter", "Nabla", "Silkscreen"],
+  "contact": {
+    "email": "sayeesck@yahoo.com",
+    "phone": "(091) 9061030036",
+    "linkedin": "https://linkedin.com/in/sayees",
+    "github": "https://github.com/sayees",
+    "portfolio": "https://sayees.vercel.app"
+  }
+}

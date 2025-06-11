@@ -3,21 +3,35 @@ import json
 import difflib
 from datetime import datetime
 import random
+import google.generativeai as genai
+from dotenv import load_dotenv
 
 class PortfolioBot:
     def __init__(self):
-        """Initialize the bot with portfolio data and configuration"""
+        """Initialize the bot with portfolio data, Gemini API, and MCP configuration"""
+        # Load environment variables
+        load_dotenv()
+        
+        # Configure Gemini AI
+        genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+        self.model = genai.GenerativeModel('gemini-pro')
+        
+        # Load portfolio data
         self.data = self.load_data()
         
-        # Update name and add role definition
+        # Create MCP context from portfolio data
+        self.mcp_context = self._create_mcp_context()
+        
+        # Bot configuration
         self.name = "AI Portfolio Assistant"
         self.role = "I am an AI assistant designed to provide information about Sayees's portfolio and professional background."
         self.last_interaction = None
         self.conversation_history = []
-
+        
         # Enhanced NLP Configuration
-        self.SPELLING_SENSITIVITY = 0.8  # Increased for better accuracy
-        self.CONFIDENCE_THRESHOLD = 0.7  # Increased for more precise responses
+        self.SPELLING_SENSITIVITY = 0.8
+        self.CONFIDENCE_THRESHOLD = 0.7
+        
         self.GREETINGS = [
             "hi", "hello", "hey", "greetings", "hi there", "hello there",
             "good morning", "good afternoon", "good evening"
@@ -68,12 +82,100 @@ class PortfolioBot:
         with open("sayees_data.json", "r") as f:
             return json.load(f)
 
+    def _create_mcp_context(self):
+        """Create Model Context Protocol format for Gemini"""
+        context = {
+            "personal_info": {
+                "name": self.data["name"],
+                "role": self.data["role"],
+                "bio": self.data["bio"],
+                "headline": self.data["headline"]
+            },
+            "skills": {
+                "technical": self.data["technical_skills"],
+                "soft": self.data["soft_skills"],
+                "tools": self.data["tools"]
+            },
+            "projects": self.data["projects"],
+            "experience": self.data["experience"],
+            "education": self.data["education"],
+            "certifications": self.data["certifications"]
+        }
+        
+        return json.dumps(context, indent=2)
+
+    async def generate_ai_response(self, user_input):
+        """Generate response using Gemini AI with MCP context"""
+        prompt = f"""
+        Context: You are an AI assistant for {self.data['name']}'s portfolio.
+        Personal Data: {self.mcp_context}
+        
+        Based on this context, provide a natural and informative response to:
+        "{user_input}"
+        
+        Rules:
+        - Keep responses professional and focused on the portfolio data
+        - Use specific examples from projects and experience
+        - Include relevant technical details when appropriate
+        - Stay within the scope of the provided context
+        """
+        
+        try:
+            response = await self.model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            print(f"Gemini API error: {str(e)}")
+            # Fallback to traditional response method
+            return self.traditional_response(user_input)
+
+    def traditional_response(self, user_input):
+        """Traditional response method as fallback"""
+        # Existing process_input logic
+        return super().process_input(user_input)
+
+    async def process_input(self, user_input):
+        """Enhanced input processing with Gemini AI integration"""
+        user_input = user_input.lower().strip()
+        
+        # Handle empty input
+        if not user_input:
+            return "I'm ready to assist you. Could you please ask a question?"
+        
+        # Handle greetings and farewells with traditional method
+        if any(greeting in user_input for greeting in self.GREETINGS):
+            return self._respond_greeting()
+            
+        if any(farewell in user_input for farewell in self.FAREWELLS):
+            return self._respond_farewell()
+        
+        # Use Gemini AI for complex queries
+        try:
+            ai_response = await self.generate_ai_response(user_input)
+            if ai_response and len(ai_response.strip()) > 0:
+                return ai_response
+        except Exception as e:
+            print(f"Falling back to traditional response due to: {str(e)}")
+        
+        # Fallback to traditional response method
+        return self.traditional_response(user_input)
+
     # ... rest of your class code unchanged ...
 
 
     def _build_keyword_map(self):
-        """Enhanced keyword mapping with more variations and specific handlers"""
+        """Enhanced keyword mapping with comprehensive skill and experience patterns"""
         return {
+            # Skills related patterns
+            "skill|skills|capable|ability|abilities|proficiency|proficient|good at|expertise": self._respond_all_skills,
+            "technical skill|programming|coding|development|tech stack|programming language": self._respond_technical_skills,
+            "soft skill|interpersonal|professional|communication": self._respond_soft_skills,
+            "tool|tools|software|platform|technology|technologies": self._respond_tools_expertise,
+            
+            # Experience related patterns
+            "experience|work|worked|background|career|job|intern|internship": self._respond_experience,
+            "project|projects|portfolio|built|created|developed|made": self._handle_projects_intro,
+            "trading|market|investment|crypto|forex": self._respond_trading_experience,
+            
             # Personal & Background
             "name|who|sayees|who are you": self._respond_name,
             "age|birth|born|how old|when were you born": self._respond_personal_info,
@@ -287,8 +389,19 @@ class PortfolioBot:
         return self._get_varied_response("farewell", farewell_responses)
 
     def process_input(self, user_input):
-        """Enhanced input processing with better matching"""
+        """Enhanced input processing with better skill and experience matching"""
         user_input = user_input.lower().strip()
+        
+        # Direct matches for common skill and experience queries
+        skill_patterns = ["what are your skills", "tell me about your skills", "what can you do", 
+                         "what are you good at", "your abilities", "your expertise"]
+        if any(pattern in user_input for pattern in skill_patterns):
+            return self._respond_all_skills()
+        
+        experience_patterns = ["what is your experience", "tell me about your experience", 
+                             "work experience", "what have you done", "your background"]
+        if any(pattern in user_input for pattern in experience_patterns):
+            return self._respond_experience()
         
         # Handle empty input
         if not user_input:
@@ -509,6 +622,112 @@ class PortfolioBot:
             f"For professional networking, reach me at {linkedin}"
         ]
         return self._get_varied_response("linkedin", responses)
+
+    def _respond_all_skills(self):
+        """Comprehensive skill response including technical, soft skills and tools"""
+        tech_skills = self.data['technical_skills']
+        soft_skills = self.data['soft_skills']
+        tools = self.data['tools']
+
+        responses = [
+            f"Here's an overview of my skills:\n\n"
+            f"📱 Technical Skills:\n"
+            f"• Languages & Frameworks: {', '.join(tech_skills[:5])}\n"
+            f"• Web Technologies: {', '.join([s for s in tech_skills if '.js' in s.lower() or s in ['HTML', 'CSS']])}\n"
+            f"• Databases: {', '.join([s for s in tech_skills if s in ['MySQL', 'Firebase', 'Supabase']])}\n\n"
+            f"🎯 Soft Skills:\n"
+            f"• {', '.join(soft_skills[:4])}\n\n"
+            f"🛠️ Tools & Platforms:\n"
+            f"• {', '.join(tools[:5])}",
+
+            f"My skill set includes:\n\n"
+            f"💻 Programming: Proficient in {', '.join(tech_skills[:3])}\n"
+            f"🌐 Web Development: {', '.join([s for s in tech_skills if '.js' in s.lower()])}\n"
+            f"🤝 Professional Skills: {', '.join(soft_skills[:3])}\n"
+            f"⚙️ Tools: {', '.join(tools[:3])}",
+
+            f"I specialize in:\n\n"
+            f"• Technical: {', '.join(tech_skills[:4])}\n"
+            f"• Professional: {', '.join(soft_skills[:3])}\n"
+            f"• Development Tools: {', '.join(tools[:3])}\n\n"
+            f"Would you like more details about any specific area?"
+        ]
+        return self._get_varied_response("all_skills", responses)
+
+    def _respond_technical_skills(self):
+        """Handle questions about technical skills with categorized response"""
+        tech_skills = self.data['technical_skills']
+        
+        # Categorize skills
+        languages = [s for s in tech_skills if s in ['Python', 'C', 'C++', 'JavaScript', 'SQL']]
+        frontend = [s for s in tech_skills if s in ['HTML', 'CSS', 'React Native', 'Next.js', 'Tailwind CSS']]
+        backend = [s for s in tech_skills if s in ['Node.js', 'Express.js', 'Firebase', 'Supabase', 'MySQL']]
+        other = [s for s in tech_skills if s not in languages + frontend + backend]
+
+        responses = [
+            f"My technical expertise includes:\n\n"
+            f"🔹 Programming Languages:\n"
+            f"• {', '.join(languages)}\n\n"
+            f"🔹 Frontend Technologies:\n"
+            f"• {', '.join(frontend)}\n\n"
+            f"🔹 Backend & Databases:\n"
+            f"• {', '.join(backend)}\n\n"
+            f"🔹 Other Technologies:\n"
+            f"• {', '.join(other)}",
+
+            f"Here's a breakdown of my technical skills:\n\n"
+            f"• Languages: {', '.join(languages)}\n"
+            f"• Frontend: {', '.join(frontend)}\n"
+            f"• Backend: {', '.join(backend)}\n"
+            f"• Additional: {', '.join(other)}",
+
+            f"I'm proficient in various technologies:\n\n"
+            f"💻 Core Languages: {', '.join(languages)}\n"
+            f"🎨 Frontend: {', '.join(frontend)}\n"
+            f"⚙️ Backend: {', '.join(backend)}\n"
+            f"🛠️ Other Tools: {', '.join(other)}"
+        ]
+        return self._get_varied_response("technical_skills", responses)
+
+    def _respond_soft_skills(self):
+        """Handle questions about soft skills with detailed responses"""
+        soft_skills = self.data['soft_skills']
+        
+        responses = [
+            f"My soft skills include:\n\n"
+            f"🤝 Professional Competencies:\n"
+            f"• {', '.join(soft_skills[:3])}\n\n"
+            f"💡 Personal Attributes:\n"
+            f"• {', '.join(soft_skills[3:])}\n\n"
+            f"These skills help me work effectively in team environments and deliver successful projects.",
+
+            f"I've developed strong interpersonal abilities including:\n"
+            f"• Core Skills: {', '.join(soft_skills[:2])}\n"
+            f"• Leadership Skills: {', '.join([s for s in soft_skills if s in ['Team Collaboration', 'Communication']])}\n"
+            f"• Personal Traits: {', '.join([s for s in soft_skills if s in ['Self-Motivation', 'Creative Thinking', 'Entrepreneurial Thinking']])}",
+
+            f"My professional soft skills encompass:\n"
+            f"• {', '.join(soft_skills)}\n\n"
+            f"These skills complement my technical abilities and help me deliver comprehensive solutions."
+        ]
+        return self._get_varied_response("soft_skills", responses)
+
+    def _respond_experience(self):
+        """Generate response about work experience"""
+        if not self.data.get("experience"):
+            return "I don't have any work experience information to share."
+        
+        experience = self.data["experience"][0]  # Getting the most recent experience
+        
+        response = (
+            f"Currently, I am working as a {experience['position']} at {experience['company']} "
+            f"({experience['duration']}).\n\nMy key responsibilities include:\n"
+        )
+        
+        for desc in experience["description"]:
+            response += f"• {desc}\n"
+            
+        return response
 
 if __name__ == "__main__":
     try:
