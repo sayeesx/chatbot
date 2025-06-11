@@ -16,7 +16,7 @@ def home():
     return jsonify({
         "status": "online",
         "bot_name": bot.name,
-        "message": "Sayees' Portfolio Bot is running"
+        "message": "Bot is running successfully!"
     })
 
 
