@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from chatbot import PortfolioBot
 import asyncio
+from asgiref.wsgi import WsgiToAsgi
+import os
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -41,12 +43,11 @@ async def chatbot():
         }), 500
 
 
+# Convert WSGI app to ASGI
+asgi_app = WsgiToAsgi(app)
+
 # Required for Gunicorn
 if __name__ == '__main__':
-    from hypercorn.config import Config
-    from hypercorn.asyncio import serve
-    import asyncio
-
-    config = Config()
-    config.bind = ["localhost:5000"]
-    asyncio.run(serve(app, config))
+    import uvicorn
+    port = int(os.environ.get("PORT", 5000))
+    uvicorn.run(asgi_app, host="0.0.0.0", port=port)
