@@ -10,12 +10,14 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# ✅ Configure CORS properly (no wildcards, specific domains)
+# ✅ Proper CORS configuration (with /api/* pattern)
 CORS(app, resources={r"/api/*": {
     "origins": [
-        "https://sayees.vercel.app",  # Replace with your actual Vercel domain
-        "http://localhost:3000"       # For local dev
+        "https://sayees.vercel.app",
+        "http://localhost:3000"
     ],
+    "methods": ["GET", "POST", "OPTIONS"],
+    "allow_headers": "*",
     "supports_credentials": True
 }})
 
