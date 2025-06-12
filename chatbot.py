@@ -1,770 +1,748 @@
-import os
 import json
-import difflib
-from datetime import datetime
+import os
+import re
 import random
-import google.generativeai as genai
-from dotenv import load_dotenv
+from datetime import datetime
+from typing import Dict, List, Optional
+from difflib import get_close_matches  # For fuzzy matching to handle spelling mistakes
+
+try:
+    from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+    print("Warning: transformers library not found. Using fallback responses.")
 
 class PortfolioBot:
-    def __init__(self):
-        """Initialize the bot with portfolio data, Gemini API, and MCP configuration"""
-        # Load environment variables
-        load_dotenv()
+    def __init__(self, data_file: str = "sayees_data.json"):
+        """Initialize the chatbot with personal data and AI model"""
         
-        # Configure Gemini AI
-        genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-        self.model = genai.GenerativeModel('gemini-pro')
+        # Load personal portfolio data
+        self.data = self._load_portfolio_data(data_file)
         
-        # Load portfolio data
-        self.data = self.load_data()
-        
-        # Create MCP context from portfolio data
-        self.mcp_context = self._create_mcp_context()
-        
-        # Bot configuration
-        self.name = "AI Portfolio Assistant"
-        self.role = "I am an AI assistant designed to provide information about Sayees's portfolio and professional background."
-        self.last_interaction = None
+        # Initialize conversation history
         self.conversation_history = []
+        self.context_memory = []
         
-        # Enhanced NLP Configuration
-        self.SPELLING_SENSITIVITY = 0.8
-        self.CONFIDENCE_THRESHOLD = 0.7
+        # Setup AI model if available
+        self.model = None
+        self.tokenizer = None
+        if TRANSFORMERS_AVAILABLE:
+            self._initialize_model()
         
-        self.GREETINGS = [
-            "hi", "hello", "hey", "greetings", "hi there", "hello there",
-            "good morning", "good afternoon", "good evening"
-        ]  # More formal greetings
-        self.FAREWELLS = [
-            "bye", "goodbye", "see you", "farewell", "thank you", "thanks",
-            "exit", "quit", "end"
-        ]  # More professional farewells
-
-        self.keyword_map = self._build_keyword_map()
-        self.misspellings = {
-            "exquio": "exquio",
-            "sayees": "sayees",
-            "linkedin": "linkedin",
-            "github": "github",
-            "data science": "data science",
-            "ai": "ai",
-            "project": "project",
-            "projects": "project",
-            "work": "project",
-            "works": "project",
-            "achievments": "achievements",
-            "experiance": "experience",
-            "certifications": "certifications",
-            "methodology": "methodology",
-            "expertise": "expertise",
-            "specialization": "specialization",
-            "leadership": "leadership",
-            "technical": "technical",
-            "programming": "programming"
-        }
-
-        # State for project conversation context
-        self.awaiting_project_choice = False
-
-        # To track last topic asked to vary responses
-        self.last_response_type = None
-        self.response_counters = {}
-
-    def load_data(self):
-        """Load portfolio data from environment variable or JSON file"""
-        env_data = os.getenv("S_DATA_JSON")
-        if env_data:
-            try:
-                return json.loads(env_data)
-            except json.JSONDecodeError:
-                print("Warning: Failed to parse S_DATA_JSON environment variable, falling back to file.")
-        with open("sayees_data.json", "r") as f:
-            return json.load(f)
-
-    def _create_mcp_context(self):
-        """Create Model Context Protocol format for Gemini"""
-        context = {
-            "personal_info": {
-                "name": self.data["name"],
-                "role": self.data["role"],
-                "bio": self.data["bio"],
-                "headline": self.data["headline"]
-            },
-            "skills": {
-                "technical": self.data["technical_skills"],
-                "soft": self.data["soft_skills"],
-                "tools": self.data["tools"]
-            },
-            "projects": self.data["projects"],
-            "experience": self.data["experience"],
-            "education": self.data["education"],
-            "certifications": self.data["certifications"]
-        }
+        # Generate context summary
+        self.context = self._generate_context_summary()
         
-        return json.dumps(context, indent=2)
+        # Predefined responses for common queries
+        self.response_templates = self._setup_response_templates()
+        
+        # Define intent keywords for fuzzy matching
+        self._setup_intent_keywords()
+        
+        # Setup response tracking to avoid repetition
+        self._setup_response_tracking()
+        
+        print("✅ PortfolioBot initialized successfully!")
 
-    async def generate_ai_response(self, user_input):
-        """Generate response using Gemini AI with MCP context"""
-        prompt = f"""
-        Context: You are an AI assistant for {self.data['name']}'s portfolio.
-        Personal Data: {self.mcp_context}
-        
-        Based on this context, provide a natural and informative response to:
-        "{user_input}"
-        
-        Rules:
-        - Keep responses professional and focused on the portfolio data
-        - Use specific examples from projects and experience
-        - Include relevant technical details when appropriate
-        - Stay within the scope of the provided context
-        """
-        
+    def _load_portfolio_data(self, data_file: str) -> Dict:
+        """Load portfolio data with error handling"""
         try:
-            response = await self.model.generate_content(prompt)
-            return response.text
-        except Exception as e:
-            print(f"Gemini API error: {str(e)}")
-            # Fallback to traditional response method
-            return self.traditional_response(user_input)
-
-    def traditional_response(self, user_input):
-        """Traditional response method as fallback"""
-        # Existing process_input logic
-        return super().process_input(user_input)
-
-    async def process_input(self, user_input):
-        """Enhanced input processing with Gemini AI integration"""
-        user_input = user_input.lower().strip()
-        
-        # Handle empty input
-        if not user_input:
-            return "I'm ready to assist you. Could you please ask a question?"
-        
-        # Handle greetings and farewells with traditional method
-        if any(greeting in user_input for greeting in self.GREETINGS):
-            return self._respond_greeting()
-            
-        if any(farewell in user_input for farewell in self.FAREWELLS):
-            return self._respond_farewell()
-        
-        # Use Gemini AI for complex queries
-        try:
-            ai_response = await self.generate_ai_response(user_input)
-            if ai_response and len(ai_response.strip()) > 0:
-                return ai_response
-        except Exception as e:
-            print(f"Falling back to traditional response due to: {str(e)}")
-        
-        # Fallback to traditional response method
-        return self.traditional_response(user_input)
-
-    # ... rest of your class code unchanged ...
-
-
-    def _build_keyword_map(self):
-        """Enhanced keyword mapping with comprehensive skill and experience patterns"""
-        return {
-            # Skills related patterns
-            "skill|skills|capable|ability|abilities|proficiency|proficient|good at|expertise": self._respond_all_skills,
-            "technical skill|programming|coding|development|tech stack|programming language": self._respond_technical_skills,
-            "soft skill|interpersonal|professional|communication": self._respond_soft_skills,
-            "tool|tools|software|platform|technology|technologies": self._respond_tools_expertise,
-            
-            # Experience related patterns
-            "experience|work|worked|background|career|job|intern|internship": self._respond_experience,
-            "project|projects|portfolio|built|created|developed|made": self._handle_projects_intro,
-            "trading|market|investment|crypto|forex": self._respond_trading_experience,
-            
-            # Personal & Background
-            "name|who|sayees|who are you": self._respond_name,
-            "age|birth|born|how old|when were you born": self._respond_personal_info,
-            "background|bio|about|tell me about|profile|introduction": self._respond_background,
-            "trading|investor|market|stock|crypto|forex": self._respond_trading_experience,
-            "location|where|city|place|based|live": self._respond_current_location,
-            "hometown|origin|from where|native": self._respond_hometown,
-            
-            # Education & Skills
-            "education|university|college|degree|study|course|bca|student": self._respond_education,
-            "skill|skills|technical|programming|coding|development|technology|tech stack|languages": self._respond_technical_background,
-            "tools|software|technologies|platform|ide|framework": self._respond_tools_expertise,
-            "certification|certificate|courses|credentials|qualified": self._respond_certifications,
-            "language|speak|communication": self._respond_languages,
-            "soft skills|interpersonal|professional skills": self._respond_skills,
-            
-            # Projects & Experience
-            "project|portfolio|work|experience|developed|built|created": self._handle_projects_intro,
-            "exquio|doctor|medical|appointment|healthcare": self._respond_exquio_details,
-            "roamio|travel|guide|tourism": self._respond_roamio_details,
-            "campus|portal|college system|complaint|management": self._respond_campus_portal_details,
-            "internship|cyber square|work experience|job": self._respond_internship_details,
-            
-            # Contact & Professional
-            "contact|reach|connect|get in touch|email|phone": self._respond_contact,
-            "website|portfolio site|personal site": self._respond_portfolio_website,
-            "github|code|repository|open source|git": self._respond_github_details,
-            "linkedin|professional|network|social|profile": self._respond_linkedin_details,
-            
-            # Interests & Expertise
-            "interest|passion|focus|specialization": self._respond_interests,
-            "ai|artificial intelligence|machine learning|ml|deep learning": self._respond_technical_background,
-            "web|frontend|backend|full stack": self._respond_technical_background
-        }
-
-    def _correct_spelling(self, text):
-        """Correct common misspellings in user input"""
-        words = text.lower().split()
-        corrected = []
-        for word in words:
-            if word in self.misspellings:
-                corrected.append(self.misspellings[word])
+            if os.path.exists(data_file):
+                with open(data_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
             else:
-                matches = difflib.get_close_matches(
-                    word,
-                    self.keyword_map.keys(),
-                    n=1,
-                    cutoff=self.SPELLING_SENSITIVITY
-                )
-                corrected.append(matches[0] if matches else word)
-        return ' '.join(corrected)
+                # Fallback data if file doesn't exist
+                return self._get_fallback_data()
+        except Exception as e:
+            print(f"Warning: Could not load {data_file}. Using fallback data. Error: {e}")
+            return self._get_fallback_data()
 
-    def _time_based_greeting(self):
-        """Enhanced time-based greeting"""
-        hour = datetime.now().hour
-        if 5 <= hour < 12:
-            return "Good morning!"
-        elif 12 <= hour < 17:
-            return "Good afternoon!"
-        else:
-            return "Good evening!"
-
-    # Response Handlers
-    def _get_varied_response(self, key, responses):
-        """Return different responses on repeated calls for same topic"""
-        count = self.response_counters.get(key, 0)
-        response = responses[count % len(responses)]
-        self.response_counters[key] = count + 1
-        return response
-
-    def _respond_name(self):
-        responses = [
-            "I'm Sayees, an aspiring AI & Data Science professional.",
-            "My name is Sayees, and I specialize in AI and Data Science.",
-            "You can call me Sayees! I work in AI and Data Science."
-        ]
-        return self._get_varied_response("name", responses)
-
-    def _respond_hometown(self):
-        hometown = self.data['location']['hometown']
-        responses = [
-            f"I'm originally from {hometown}.",
-            f"My hometown is {hometown}.",
-            f"I grew up in {hometown}."
-        ]
-        return self._get_varied_response("hometown", responses)
-
-    def _respond_current_location(self):
-        current = self.data['location']['current']
-        responses = [
-            f"I'm currently based in {current}.",
-            f"Right now I'm living in {current}.",
-            f"These days I'm located in {current}."
-        ]
-        return self._get_varied_response("current_location", responses)
-
-    def _respond_education(self):
-        edu = self.data["education"]["current"]
-        responses = [
-            f"I'm pursuing {edu['degree']} specializing in {edu['specialization']} at {edu['college']}.",
-            f"My current academic focus is {edu['degree']} with a specialization in {edu['specialization']}.",
-            f"I'm enrolled in the {edu['degree']} program at {edu['college']}, {edu['university']}."
-        ]
-        return self._get_varied_response("education", responses)
-
-    def _respond_interests(self):
-        interests = ', '.join(self.data['interests'][:-1]) + ', and ' + self.data['interests'][-1]
-        responses = [
-            f"I'm particularly interested in: {interests}.",
-            f"My professional interests include: {interests}.",
-            f"I'm passionate about several areas: {interests}."
-        ]
-        return self._get_varied_response("interests", responses)
-
-    def _respond_languages(self):
-        languages = ', '.join(self.data['languages'][:-1]) + ', and ' + self.data['languages'][-1]
-        responses = [
-            f"I'm comfortable communicating in {languages}.",
-            f"I can speak {languages}.",
-            f"My language skills include {languages}."
-        ]
-        return self._get_varied_response("languages", responses)
-
-    def _respond_skills(self):
-        skills = ', '.join(self.data['soft_skills'][:-1]) + ', and ' + self.data['soft_skills'][-1]
-        responses = [
-            f"My interpersonal skills include: {skills}.",
-            f"I've developed several soft skills: {skills}.",
-            f"In terms of professional skills, I excel at: {skills}."
-        ]
-        return self._get_varied_response("skills", responses)
-
-    def _respond_tools(self):
-        tools = ', '.join(self.data['tools'][:-1]) + ', and ' + self.data['tools'][-1]
-        responses = [
-            f"In my work, I regularly use tools like: {tools}.",
-            f"My technical toolkit includes: {tools}.",
-            f"I'm proficient with several platforms: {tools}."
-        ]
-        return self._get_varied_response("tools", responses)
-
-    def _respond_contact(self):
-        contact = self.data['contact']
-        responses = [
-            f"Let's connect! LinkedIn: {contact['linkedin']} | GitHub: {contact['github']}",
-            f"Reach me on LinkedIn: {contact['linkedin']} or GitHub: {contact['github']}",
-            f"Professional contacts: LinkedIn ({contact['linkedin']}) | GitHub ({contact['github']})"
-        ]
-        return self._get_varied_response("contact", responses)
-
-    def _respond_help(self):
-        """More structured and professional help response"""
-        return ("I can provide information in the following categories:\n"
-                "1. Professional Background: Education and qualifications\n"
-                "2. Technical Skills: Programming languages and tools\n"
-                "3. Projects: Detailed information about professional projects\n"
-                "4. Professional Interests: Areas of expertise and focus\n"
-                "5. Contact Information: Professional networking channels\n\n"
-                "How may I assist you today?")
-
-    def _list_projects(self):
-        """Return a formatted string listing all project names."""
-        projects = self.data["projects"]
-        project_names = [proj['name'] for proj in projects]
-        formatted_list = "\n".join(f"- {name}" for name in project_names)
-        return f"Here are some of my projects:\n{formatted_list}"
-
-    def _handle_projects_intro(self):
-        """List projects and ask user which one to know about."""
-        self.awaiting_project_choice = True
-        return (self._list_projects() +
-                "\nWhich project would you like to know more about? Please type the project name.")
-
-    def _respond_project_details(self, project_name):
-        """Return detailed info about the specified project or fallback message."""
-        projects = self.data["projects"]
-        # Use fuzzy matching to find the best project match
-        project_names = [proj['name'].lower() for proj in projects]
-        matches = difflib.get_close_matches(project_name.lower(), project_names, n=1, cutoff=0.6)
-        if matches:
-            matched_name = matches[0]
-            for proj in projects:
-                if proj['name'].lower() == matched_name:
-                    tech = ', '.join(proj['technologies'][:-1]) + ', and ' + proj['technologies'][-1] if len(proj['technologies']) > 1 else proj['technologies'][0]
-                    response_variations = [
-                        f"Project '{proj['name']}': {proj['description']} Technologies used include {tech}.",
-                        f"Here's more about '{proj['name']}': {proj['description']} Built with {tech}.",
-                        f"'{proj['name']}' is a project where I worked on {proj['description']}. It uses {tech}."
-                    ]
-                    return random.choice(response_variations)
-        else:
-            return ("I couldn't find that project. Please check the name or type 'list projects' to see available projects.")
-
-    def _respond_greeting(self):
-        """Enhanced greeting responses"""
-        current_time = self._time_based_greeting()
-        greetings_responses = [
-            f"{current_time} I'm your AI Portfolio Assistant. How can I help you today?",
-            f"{current_time} I'm here to tell you about Sayees's work and experience. What would you like to know?",
-            f"{current_time} Welcome! I can share information about Sayees's projects, skills, and experience. What interests you?"
-        ]
-        return self._get_varied_response("greeting", greetings_responses)
-
-    def _respond_farewell(self):
-        """Enhanced farewell responses"""
-        farewell_responses = [
-            "Goodbye! Feel free to return if you have more questions.",
-            "Thank you for your time! Have a great day!",
-            "Farewell! Don't hesitate to ask if you need more information in the future."
-        ]
-        return self._get_varied_response("farewell", farewell_responses)
-
-    def process_input(self, user_input):
-        """Enhanced input processing with better skill and experience matching"""
-        user_input = user_input.lower().strip()
-        
-        # Direct matches for common skill and experience queries
-        skill_patterns = ["what are your skills", "tell me about your skills", "what can you do", 
-                         "what are you good at", "your abilities", "your expertise"]
-        if any(pattern in user_input for pattern in skill_patterns):
-            return self._respond_all_skills()
-        
-        experience_patterns = ["what is your experience", "tell me about your experience", 
-                             "work experience", "what have you done", "your background"]
-        if any(pattern in user_input for pattern in experience_patterns):
-            return self._respond_experience()
-        
-        # Handle empty input
-        if not user_input:
-            return "I'm ready to assist you. Could you please ask a question?"
-
-        # Enhanced greeting detection with more variations
-        greetings = [g.lower() for g in self.GREETINGS]
-        if any(greeting in user_input for greeting in greetings):
-            return self._respond_greeting()
-
-        # Enhanced farewell detection with more variations
-        farewells = [f.lower() for f in self.FAREWELLS]
-        if any(farewell in user_input for farewell in farewells):
-            return self._respond_farewell()
-
-        # Handle help command and variations
-        if any(word in user_input for word in ["help", "assist", "guide", "what can you do"]):
-            return self._respond_help()
-
-        # Handle project listing request with more variations
-        if any(phrase in user_input for phrase in [
-            "list projects", "show projects", "what projects", 
-            "tell me about projects", "what have you built",
-            "what did you make", "your projects"
-        ]):
-            return self._list_projects()
-
-        # If awaiting project choice, handle that first
-        if self.awaiting_project_choice:
-            self.awaiting_project_choice = False
-            return self._respond_project_details(user_input)
-
-        # Enhanced keyword matching
-        best_match = None
-        highest_score = 0
-
-        for pattern, handler in self.keyword_map.items():
-            keywords = pattern.split('|')
-            for keyword in keywords:
-                # Check for exact matches first
-                if keyword in user_input:
-                    return handler()
-                
-                # Try fuzzy matching for longer inputs
-                score = difflib.SequenceMatcher(None, keyword, user_input).ratio()
-                if score > highest_score and score >= self.CONFIDENCE_THRESHOLD:
-                    highest_score = score
-                    best_match = handler
-
-        # Use best match if found
-        if best_match:
-            return best_match()
-
-        # If still no match, try to understand the intent
-        common_phrases = {
-            "tell me about": self._respond_background,
-            "what is your": self._respond_background,
-            "can you": self._respond_help,
-            "do you": self._respond_help,
-            "how to": self._respond_help,
-            "skills": self._respond_technical_background,
-            "experience": self._respond_internship_details,
-            "projects": self._handle_projects_intro
+    def _get_fallback_data(self) -> Dict:
+        """Provide fallback data structure"""
+        return {
+            "name": "Muhammed Sayees",
+            "role": "Software Developer & AI/ML Engineer",
+            "education": {
+                "current": {
+                    "degree": "Bachelor's",
+                    "specialization": "Computer Science",
+                    "college": "Engineering College",
+                    "university": "University"
+                }
+            },
+            "location": {
+                "current": "Bengaluru, India",
+                "hometown": "Kerala, India"
+            },
+            "experience": [
+                {
+                    "company": "Tech Company",
+                    "duration": "6 months"
+                }
+            ],
+            "projects": [
+                {
+                    "name": "AI Portfolio Bot",
+                    "description": "Intelligent chatbot for portfolio website"
+                }
+            ],
+            "technical_skills": ["Python", "Machine Learning", "Web Development"],
+            "languages": ["English", "Malayalam", "Hindi"],
+            "trading_experience": {
+                "years": "2+"
+            }
         }
 
-        for phrase, handler in common_phrases.items():
-            if phrase in user_input:
-                return handler()
-
-        # Default response with suggestions
-        return self._respond_unknown()
-
-    def _respond_personal_info(self):
-        """Handle questions about age, birth, etc."""
-        responses = [
-            f"I am {self.data['age']} years old, born in {self.data['birth']['year']} in {self.data['birth']['place']}.",
-            f"I was born in {self.data['birth']['place']} in {self.data['birth']['year']}.",
-            f"I'm a {self.data['age']}-year-old developer from {self.data['birth']['place']}."
-        ]
-        return self._get_varied_response("personal_info", responses)
-
-    def _respond_trading_experience(self):
-        """Handle questions about trading experience"""
-        trading = self.data['trading_experience']
-        responses = [
-            f"I have {trading['years']} years of experience trading in {', '.join(trading['domains'])}.",
-            f"As an {trading['role']}, I've been actively involved in {', '.join(trading['domains'])} for {trading['years']} years.",
-            f"My trading journey spans {trading['years']} years across {', '.join(trading['domains'])}."
-        ]
-        return self._get_varied_response("trading", responses)
-
-    def _respond_technical_background(self):
-        """Handle questions about technical skills"""
-        tech_skills = self.data['technical_skills']
-        responses = [
-            f"I'm proficient in {', '.join(tech_skills[:5])} among other technologies.",
-            f"My technical stack includes {', '.join(tech_skills[:3])} as primary languages, along with frameworks like {', '.join([s for s in tech_skills if '.js' in s.lower()])}.",
-            f"I work with various technologies including {', '.join(tech_skills[:4])}, specializing in AI and web development."
-        ]
-        return self._get_varied_response("technical", responses)
-
-    def _respond_certifications(self):
-        """Handle questions about certifications"""
-        certs = self.data['certifications']
-        responses = [
-            f"I hold several certifications including {', '.join(certs[:3])}.",
-            f"My key certifications are in {certs[0]} and {certs[1]}, along with {len(certs)-2} other credentials.",
-            f"I've completed certifications from various organizations, notably {', '.join(certs[:3])}."
-        ]
-        return self._get_varied_response("certifications", responses)
-
-    def _respond_exquio_details(self):
-        """Handle specific questions about Exquio project"""
-        project = next(p for p in self.data['projects'] if p['name'] == 'Exquio')
-        responses = [
-            f"Exquio is {project['description']} It's built using {', '.join(project['technologies'])}.",
-            f"The Exquio project is a healthcare solution that {project['description'].lower()}",
-            f"I developed Exquio using {', '.join(project['technologies'])}, creating {project['description'].lower()}"
-        ]
-        return self._get_varied_response("exquio", responses)
-
-    def _respond_background(self):
-        """Handle questions about background and bio"""
-        responses = [
-            f"{self.data['bio']} My current role is {self.data['role']}.",
-            f"Here's a bit about me: {self.data['bio']}",
-            f"{self.data['headline']} {self.data['bio']}"
-        ]
-        return self._get_varied_response("background", responses)
-
-    def _respond_unknown(self):
-        """Handle unknown or unclear queries"""
-        responses = [
-            f"I specialize in providing information about {self.data['name']}'s professional background and work. "
-            "You can ask about:\n"
-            "- Education and skills\n"
-            "- Projects and experience\n"
-            "- Technical expertise\n"
-            "- Certifications\n"
-            "- Contact information",
+    def _initialize_model(self):
+        """Initialize the AI model with proper error handling"""
+        try:
+            model_name = "microsoft/DialoGPT-small"  # Using small model for better performance
             
-            f"I'm focused on sharing information about {self.data['name']}'s work in {self.data['role']}. "
-            "Would you like to know about specific projects, skills, or experience?",
+            print("🤖 Loading AI model... This may take a moment.")
             
-            "I may not have information about that topic. "
-            f"I can tell you about {self.data['name']}'s background in {', '.join(self.data['interests'][:3])}. "
-            "What would you like to know?"
-        ]
-        return random.choice(responses)
-
-    def _respond_tools_expertise(self):
-        """Handle questions about tools and technologies"""
-        tools = self.data['tools']
-        responses = [
-            f"I'm experienced with {', '.join(tools[:5])} and other development tools.",
-            f"My toolkit includes {', '.join(tools)} for development and deployment.",
-            f"I work with various tools including {', '.join(tools[:3])} among others."
-        ]
-        return self._get_varied_response("tools", responses)
-
-    def _respond_roamio_details(self):
-        """Handle questions about Roamio project"""
-        project = next(p for p in self.data['projects'] if p['name'] == 'Roamio')
-        responses = [
-            f"Roamio is {project['description']} It's built using {', '.join(project['technologies'])}.",
-            f"The Roamio project is a travel platform that {project['description'].lower()}",
-            f"I developed Roamio using {', '.join(project['technologies'])}, creating {project['description'].lower()}"
-        ]
-        return self._get_varied_response("roamio", responses)
-
-    def _respond_campus_portal_details(self):
-        """Handle questions about Campus Portal project"""
-        project = next(p for p in self.data['projects'] if p['name'] == 'Campus Portal')
-        responses = [
-            f"The Campus Portal is {project['description']} It's built using {', '.join(project['technologies'])}.",
-            f"The Campus Portal project {project['description'].lower()}",
-            f"I developed the Campus Portal using {', '.join(project['technologies'])}, creating {project['description'].lower()}"
-        ]
-        return self._get_varied_response("campus_portal", responses)
-
-    def _respond_internship_details(self):
-        """Handle questions about internship experience"""
-        exp = self.data['experience'][0]  # Assuming first experience is the internship
-        responses = [
-            f"I'm working as {exp['position']} at {exp['company']}, where I {', '.join(exp['description'])}.",
-            f"At {exp['company']}, I {', '.join(exp['description'])}.",
-            f"My internship at {exp['company']} involves {', '.join(exp['description'])}."
-        ]
-        return self._get_varied_response("internship", responses)
-
-    def _respond_portfolio_website(self):
-        """Handle questions about portfolio website"""
-        website = self.data['contact']['portfolio']
-        project = next(p for p in self.data['projects'] if p['name'] == 'Portfolio Website')
-        responses = [
-            f"You can visit my portfolio at {website}. {project['description']}",
-            f"My portfolio website ({website}) {project['description'].lower()}",
-            f"Check out my work at {website} - {project['description']}"
-        ]
-        return self._get_varied_response("portfolio", responses)
-
-    def _respond_github_details(self):
-        """Handle questions about GitHub"""
-        github = self.data['contact']['github']
-        responses = [
-            f"You can find my code repositories on GitHub: {github}",
-            f"Check out my projects on GitHub: {github}",
-            f"My GitHub profile ({github}) showcases my development work."
-        ]
-        return self._get_varied_response("github", responses)
-
-    def _respond_linkedin_details(self):
-        """Handle questions about LinkedIn"""
-        linkedin = self.data['contact']['linkedin']
-        responses = [
-            f"Let's connect on LinkedIn: {linkedin}",
-            f"You can find my professional profile on LinkedIn: {linkedin}",
-            f"For professional networking, reach me at {linkedin}"
-        ]
-        return self._get_varied_response("linkedin", responses)
-
-    def _respond_all_skills(self):
-        """Comprehensive skill response including technical, soft skills and tools"""
-        tech_skills = self.data['technical_skills']
-        soft_skills = self.data['soft_skills']
-        tools = self.data['tools']
-
-        responses = [
-            f"Here's an overview of my skills:\n\n"
-            f"📱 Technical Skills:\n"
-            f"• Languages & Frameworks: {', '.join(tech_skills[:5])}\n"
-            f"• Web Technologies: {', '.join([s for s in tech_skills if '.js' in s.lower() or s in ['HTML', 'CSS']])}\n"
-            f"• Databases: {', '.join([s for s in tech_skills if s in ['MySQL', 'Firebase', 'Supabase']])}\n\n"
-            f"🎯 Soft Skills:\n"
-            f"• {', '.join(soft_skills[:4])}\n\n"
-            f"🛠️ Tools & Platforms:\n"
-            f"• {', '.join(tools[:5])}",
-
-            f"My skill set includes:\n\n"
-            f"💻 Programming: Proficient in {', '.join(tech_skills[:3])}\n"
-            f"🌐 Web Development: {', '.join([s for s in tech_skills if '.js' in s.lower()])}\n"
-            f"🤝 Professional Skills: {', '.join(soft_skills[:3])}\n"
-            f"⚙️ Tools: {', '.join(tools[:3])}",
-
-            f"I specialize in:\n\n"
-            f"• Technical: {', '.join(tech_skills[:4])}\n"
-            f"• Professional: {', '.join(soft_skills[:3])}\n"
-            f"• Development Tools: {', '.join(tools[:3])}\n\n"
-            f"Would you like more details about any specific area?"
-        ]
-        return self._get_varied_response("all_skills", responses)
-
-    def _respond_technical_skills(self):
-        """Handle questions about technical skills with categorized response"""
-        tech_skills = self.data['technical_skills']
-        
-        # Categorize skills
-        languages = [s for s in tech_skills if s in ['Python', 'C', 'C++', 'JavaScript', 'SQL']]
-        frontend = [s for s in tech_skills if s in ['HTML', 'CSS', 'React Native', 'Next.js', 'Tailwind CSS']]
-        backend = [s for s in tech_skills if s in ['Node.js', 'Express.js', 'Firebase', 'Supabase', 'MySQL']]
-        other = [s for s in tech_skills if s not in languages + frontend + backend]
-
-        responses = [
-            f"My technical expertise includes:\n\n"
-            f"🔹 Programming Languages:\n"
-            f"• {', '.join(languages)}\n\n"
-            f"🔹 Frontend Technologies:\n"
-            f"• {', '.join(frontend)}\n\n"
-            f"🔹 Backend & Databases:\n"
-            f"• {', '.join(backend)}\n\n"
-            f"🔹 Other Technologies:\n"
-            f"• {', '.join(other)}",
-
-            f"Here's a breakdown of my technical skills:\n\n"
-            f"• Languages: {', '.join(languages)}\n"
-            f"• Frontend: {', '.join(frontend)}\n"
-            f"• Backend: {', '.join(backend)}\n"
-            f"• Additional: {', '.join(other)}",
-
-            f"I'm proficient in various technologies:\n\n"
-            f"💻 Core Languages: {', '.join(languages)}\n"
-            f"🎨 Frontend: {', '.join(frontend)}\n"
-            f"⚙️ Backend: {', '.join(backend)}\n"
-            f"🛠️ Other Tools: {', '.join(other)}"
-        ]
-        return self._get_varied_response("technical_skills", responses)
-
-    def _respond_soft_skills(self):
-        """Handle questions about soft skills with detailed responses"""
-        soft_skills = self.data['soft_skills']
-        
-        responses = [
-            f"My soft skills include:\n\n"
-            f"🤝 Professional Competencies:\n"
-            f"• {', '.join(soft_skills[:3])}\n\n"
-            f"💡 Personal Attributes:\n"
-            f"• {', '.join(soft_skills[3:])}\n\n"
-            f"These skills help me work effectively in team environments and deliver successful projects.",
-
-            f"I've developed strong interpersonal abilities including:\n"
-            f"• Core Skills: {', '.join(soft_skills[:2])}\n"
-            f"• Leadership Skills: {', '.join([s for s in soft_skills if s in ['Team Collaboration', 'Communication']])}\n"
-            f"• Personal Traits: {', '.join([s for s in soft_skills if s in ['Self-Motivation', 'Creative Thinking', 'Entrepreneurial Thinking']])}",
-
-            f"My professional soft skills encompass:\n"
-            f"• {', '.join(soft_skills)}\n\n"
-            f"These skills complement my technical abilities and help me deliver comprehensive solutions."
-        ]
-        return self._get_varied_response("soft_skills", responses)
-
-    def _respond_experience(self):
-        """Generate response about work experience"""
-        if not self.data.get("experience"):
-            return "I don't have any work experience information to share."
-        
-        experience = self.data["experience"][0]  # Getting the most recent experience
-        
-        response = (
-            f"Currently, I am working as a {experience['position']} at {experience['company']} "
-            f"({experience['duration']}).\n\nMy key responsibilities include:\n"
-        )
-        
-        for desc in experience["description"]:
-            response += f"• {desc}\n"
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model_name, 
+                padding_side="left",
+                use_fast=True
+            )
             
-        return response
+            # Set pad token
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            
+            # Load model
+            model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                low_cpu_mem_usage=True,
+                torch_dtype="auto"
+            )
+            
+            # Create pipeline
+            self.model = pipeline(
+                "text-generation",
+                model=model,
+                tokenizer=self.tokenizer,
+                max_length=200,
+                num_return_sequences=1,
+                temperature=0.7,
+                do_sample=True,
+                pad_token_id=self.tokenizer.eos_token_id
+            )
+            
+            print("✅ AI model loaded successfully!")
+            
+        except Exception as e:
+            print(f"⚠️  Could not load AI model: {e}")
+            print("🔄 Falling back to template-based responses.")
+            self.model = None
 
-if __name__ == "__main__":
+    def _generate_context_summary(self) -> str:
+        """Create a comprehensive context summary"""
+        try:
+            education = self.data.get("education", {}).get("current", {})
+            projects = self.data.get("projects", [])
+            experience = self.data.get("experience", [])
+            
+            context = f"""I am {self.data.get('name', 'Sayees')}, a {self.data.get('role', 'Software Developer')}. 
+I'm currently studying {education.get('degree', 'Computer Science')} in {education.get('specialization', 'Technology')} 
+at {education.get('college', 'my college')}, {education.get('university', 'my university')}.
+
+I'm based in {self.data.get('location', {}).get('current', 'India')}, 
+and my hometown is {self.data.get('location', {}).get('hometown', 'Kerala')}.
+
+{'I have internship experience at ' + experience[0].get('company', 'a tech company') + ' for ' + experience[0].get('duration', 'several months') + '.' if experience else 'I am gaining experience through various projects.'}
+
+My key projects include:
+{chr(10).join([f"• {p.get('name', 'Project')}: {p.get('description', 'Innovative solution')}" for p in projects[:3]])}
+
+I'm fluent in {', '.join(self.data.get('languages', ['English']))}, 
+and my technical expertise includes {', '.join(self.data.get('technical_skills', ['Programming']))}.
+
+I also have {self.data.get('trading_experience', {}).get('years', '2+')} years of experience 
+in financial trading across stocks, cryptocurrency, and forex markets."""
+            
+            return context.strip()
+            
+        except Exception as e:
+            print(f"Error generating context: {e}")
+            return f"I am {self.data.get('name', 'Sayees')}, a software developer and AI enthusiast."
+
+    def _setup_response_templates(self) -> Dict[str, List[str]]:
+        """Setup template responses for common queries"""
+        return {
+            "greeting": [
+                f"Hello! I'm {self.data.get('name', 'Sayees')}'s AI assistant. How can I help you learn more about my background and projects?",
+                f"Hi there! Welcome to {self.data.get('name', 'Sayees')}'s portfolio. What would you like to know?",
+                "Greetings! I'm here to tell you about my skills, projects, and experience. What interests you most?",
+                f"Welcome! I'm the AI assistant for {self.data.get('name', 'Sayees')}'s portfolio. Feel free to ask about my technical background!",
+                "Hello and welcome! I'm here to share information about my professional journey. What catches your interest?"
+            ],
+            "name_intro": [
+                f"I'm {self.data.get('name', 'Sayees')}, a {self.data.get('role', 'Software Developer')} passionate about AI and technology.",
+                f"My name is {self.data.get('name', 'Sayees')}, and I specialize in software development and machine learning.",
+                f"I'm {self.data.get('name', 'Sayees')} - a tech enthusiast working in software development and AI/ML engineering.",
+                f"You can call me {self.data.get('name', 'Sayees')}! I'm a developer focused on creating innovative AI and web solutions.",
+                f"I'm {self.data.get('name', 'Sayees')}, currently pursuing my passion in software development while building expertise in AI and machine learning.",
+                f"Nice to meet you! I'm {self.data.get('name', 'Sayees')}, a software developer who loves working with cutting-edge technologies like AI and machine learning."
+            ],
+            "skills": [
+                f"My technical skills include {', '.join(self.data.get('technical_skills', ['Programming']))}. I'm particularly strong in AI/ML and web development.",
+                "I work with modern technologies focusing on AI, machine learning, and full-stack development.",
+                f"I'm proficient in {', '.join(self.data.get('technical_skills', ['Programming']))} and have hands-on experience with various frameworks and tools.",
+                "My expertise spans across multiple domains including artificial intelligence, web development, and system design."
+            ],
+            "projects": [
+                "I've worked on several interesting projects including AI applications, web development, and trading systems.",
+                "My projects range from machine learning models to web applications and financial trading tools.",
+                "I love building innovative solutions! My portfolio includes AI-powered applications, web platforms, and automated trading systems.",
+                "I've developed various projects that showcase my skills in AI, web development, and financial technology."
+            ],
+            "general_redirect": [
+                "I'm here to showcase my professional background and technical expertise. What aspect of my portfolio interests you most?",
+                "I specialize in discussing my skills, projects, and professional journey. What would you like to explore?",
+                "My focus is on sharing insights about my technical background and career. What specific area catches your attention?",
+                "I'm designed to highlight my professional capabilities and experience. Which topic would you like to dive into?",
+                "Let me tell you about my technical journey! What aspect of my background would you like to know more about?",
+                "I'm passionate about discussing my work in technology and development. What interests you most?",
+                "I'd love to share my professional story with you! Are you curious about my skills, projects, or experience?",
+                "My expertise lies in software development and AI. What particular area would you like to explore?",
+                "I'm here to discuss my technical background and achievements. What would you like to learn about?",
+                "Feel free to ask about my programming skills, projects, or professional experience. What sounds interesting to you?"
+            ],
+            "irrelevant_polite": [
+                "That's an interesting question, but I'm here specifically to help you learn about my professional background and projects. What would you like to know about my skills or experience?",
+                "I appreciate your curiosity, but I'm designed to discuss my portfolio and professional experience. Would you like to hear about my technical projects or career journey?",
+                "While that's a fascinating topic, I'm focused on helping visitors understand my professional background. Can I tell you about my latest projects or technical skills instead?",
+                "I'd love to help, but I specialize in discussing my portfolio, skills, and professional experience. What aspect of my background interests you most?",
+                "That's outside my expertise, but I'm great at talking about my technical skills and projects! What would you like to explore?",
+                "I'm not equipped for that topic, but I can share exciting details about my development work and AI projects. Interested?"
+            ],
+            "irrelevant_redirect": [
+                "I'm not equipped to help with that particular topic, but I'd be happy to discuss my software development projects, AI/ML experience, or trading background. What would you like to explore?",
+                "That's outside my area of expertise. However, I can share insights about my technical skills, project experience, or professional journey. What interests you?",
+                "I'm specifically designed to showcase my portfolio and professional capabilities. Would you like to learn about my programming skills, recent projects, or educational background?",
+                "I focus on discussing my professional experience and technical expertise. Can I interest you in learning about my AI projects, development skills, or trading experience instead?",
+                "That's not my specialty, but I excel at discussing my technical background! Want to hear about my latest projects or skills?",
+                "I'm better suited to talk about my professional journey and technical achievements. What aspect would you like to explore?"
+            ],
+            "inappropriate": [
+                "I'm here to maintain a professional conversation about my portfolio and career. Let's focus on my technical skills, projects, or professional experience instead.",
+                "I prefer to keep our conversation professional and portfolio-focused. What would you like to know about my technical background or projects?",
+                "I'm designed to discuss my professional qualifications and experience. Would you like to hear about my development projects or technical skills?",
+                "Let's keep things professional! I'd be happy to discuss my technical expertise, projects, or career journey instead."
+            ],
+            "error": [
+                "I apologize, but I'm having trouble processing that right now. Could you rephrase your question?",
+                "Something went wrong on my end. Please try asking again, and I'll do my best to help!",
+                "I'm experiencing a technical hiccup. Could you try rephrasing your question?",
+                "Oops! I encountered an issue. Mind trying that again in a different way?"
+            ],
+            "unclear": [
+                "I'm not quite sure what you're asking. Could you rephrase your question about my portfolio, skills, or experience?",
+                "I didn't quite catch that. Would you mind clarifying what aspect of my background you'd like to know about?",
+                "I'm having trouble understanding your question. Could you try asking in a different way about my professional experience or projects?",
+                "Could you help me understand what you're looking for? I'm here to discuss my technical background and projects.",
+                "I'm not sure I follow. Could you rephrase your question about my skills, experience, or projects?"
+            ]
+        }
+
+    def _get_varied_response(self, response_type: str, fallback_message: str = None) -> str:
+        """Get a varied response to avoid repetition"""
+        if response_type in self.response_templates:
+            available_responses = self.response_templates[response_type]
+        
+        # Filter out recently used responses
+            unused_responses = [r for r in available_responses if r not in self.recent_responses]
+        
+        # If all responses have been used recently, reset and use all
+            if not unused_responses:
+                self.recent_responses = []
+                unused_responses = available_responses
+        
+        # Select a random unused response
+            selected_response = random.choice(unused_responses)
+        
+        # Track this response
+            self.recent_responses.append(selected_response)
+            if len(self.recent_responses) > self.max_recent_responses:
+                self.recent_responses.pop(0)
+        
+            return selected_response
+    
+        return fallback_message or "I'm here to help you learn about my professional background."
+
+    def _setup_intent_keywords(self):
+        """Setup keywords for each intent category for fuzzy matching"""
+        self.intent_keywords = {
+            "greeting": ["hello", "hi", "hey", "greetings", "good morning", "good afternoon", "good evening", "howdy", "sup", "hola"],
+            "name_intro": ["name", "who are you", "introduce", "about you", "sayees", "who is", "tell me about yourself", "your name"],
+            "skills": ["skills", "technical", "programming", "languages", "technologies", "expertise", "stack", "tech stack", "coding", "develop", "software", "framework", "library", "tool"],
+            "projects": ["projects", "work", "portfolio", "built", "created", "developed", "github", "showcase", "demo", "application", "app", "website", "system", "platform"],
+            "experience": ["experience", "internship", "job", "work history", "career", "professional", "industry", "company", "employment", "worked", "role", "position"],
+            "education": ["education", "study", "college", "university", "degree", "qualification", "academic", "school", "course", "major", "graduate", "student"],
+            "contact": ["contact", "reach", "email", "phone", "connect", "hire", "recruiting", "message", "get in touch", "social media", "linkedin"],
+            "trading": ["trading", "crypto", "cryptocurrency", "forex", "stocks", "investment", "market", "finance", "financial", "trade", "investor", "portfolio", "asset"]
+        }
+        
+        # Flatten all keywords for quick lookup
+        self.all_keywords = []
+        for category, words in self.intent_keywords.items():
+            self.all_keywords.extend(words)
+
+    def _setup_response_tracking(self):
+        """Setup response tracking to avoid repetition"""
+        self.recent_responses = []
+        self.max_recent_responses = 5
+
+    def _normalize_text(self, text: str) -> str:
+        """Normalize text by removing extra spaces, punctuation, and converting to lowercase"""
+        # Convert to lowercase
+        text = text.lower()
+        
+        # Remove punctuation except apostrophes
+        text = re.sub(r'[^\w\s\']', ' ', text)
+        
+        # Replace multiple spaces with a single space
+        text = re.sub(r'\s+', ' ', text)
+        
+        return text.strip()
+
+    def _extract_keywords(self, text: str) -> List[str]:
+        """Extract words from text for fuzzy matching"""
+        normalized = self._normalize_text(text)
+        words = normalized.split()
+        # Filter out very short words and common stop words
+        stop_words = {'a', 'an', 'the', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 
+                     'be', 'been', 'being', 'to', 'of', 'for', 'with', 'by', 'about', 
+                     'against', 'between', 'into', 'through', 'during', 'before', 'after',
+                     'above', 'below', 'from', 'up', 'down', 'in', 'out', 'on', 'off', 
+                     'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there',
+                     'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few',
+                     'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only',
+                     'own', 'same', 'so', 'than', 'too', 'very', 'can', 'will', 'just',
+                     'should', 'now'}
+        
+        return [word for word in words if len(word) > 2 and word not in stop_words]
+
+    def _classify_intent(self, user_input: str) -> str:
+        """Classify user intent based on keywords and context with fuzzy matching for spelling mistakes"""
+        user_input_lower = user_input.lower()
+        
+        # Check for inappropriate content first (exact match for sensitive words)
+        inappropriate_words = [
+            "sex", "dating", "relationship", "personal life", "family", "girlfriend", "boyfriend",
+            "politics", "religion", "controversial", "offensive", "illegal", "drugs", "violence"
+        ]
+        
+        if any(word in user_input_lower for word in inappropriate_words):
+            return "inappropriate"
+        
+        # Extract keywords from user input
+        input_keywords = self._extract_keywords(user_input)
+        
+        if not input_keywords:
+            return "unclear"  # No meaningful keywords found
+        
+        # Try fuzzy matching for each keyword in user input
+        matched_intents = {}
+        
+        for user_word in input_keywords:
+            # Find close matches in our keyword dictionary
+            matches = get_close_matches(user_word, self.all_keywords, n=3, cutoff=0.75)
+            
+            if matches:
+                # Find which intent category these matches belong to
+                for match in matches:
+                    for intent, keywords in self.intent_keywords.items():
+                        if match in keywords:
+                            matched_intents[intent] = matched_intents.get(intent, 0) + 1
+        
+        # If we found matches, return the intent with the most matches
+        if matched_intents:
+            return max(matched_intents.items(), key=lambda x: x[1])[0]
+        
+        # Check for common irrelevant topics
+        irrelevant_topics = [
+            "weather", "food", "movies", "music", "sports", "games", "celebrities", "news",
+            "cooking", "travel", "fashion", "animals", "pets", "hobbies", "entertainment",
+            "jokes", "funny", "memes", "random", "philosophy", "literature", "history",
+            "geography", "science facts", "trivia", "gossip", "shopping", "health advice",
+            "medical advice", "legal advice", "financial advice", "investment advice"
+        ]
+        
+        if any(topic in user_input_lower for topic in irrelevant_topics):
+            return "irrelevant"
+        
+        # Check for questions that are clearly not portfolio-related
+        question_starters = [
+            "what is", "how to", "why does", "when did", "where is", "can you help me with",
+            "tell me about the", "explain", "what do you think about", "do you know about",
+            "have you heard", "what's your opinion"
+        ]
+        
+        if any(phrase in user_input_lower for phrase in question_starters) and not self._is_portfolio_related(user_input):
+            return "irrelevant"
+        
+        # Default to general if we can't determine a specific intent
+        return "general"
+
+    def _get_template_response(self, intent: str, user_input: str) -> str:
+        """Generate response based on intent and templates"""
+    
+        if intent == "greeting":
+            return self._get_varied_response("greeting")
+    
+        elif intent == "name_intro":
+            return self._get_varied_response("name_intro")
+    
+        elif intent == "skills":
+            skills = self.data.get('technical_skills', ['Programming'])
+            base_responses = [
+                f"I have expertise in {', '.join(skills)}. I specialize in AI/ML, web development, and have experience with trading systems.",
+                f"My technical toolkit includes {', '.join(skills)}. I'm particularly passionate about AI/ML and creating innovative web solutions.",
+                f"I work with {', '.join(skills)} and focus on building intelligent systems and robust web applications.",
+                f"My skill set covers {', '.join(skills)}, with special emphasis on artificial intelligence and modern web development."
+            ]
+            return random.choice(base_responses)
+    
+        elif intent == "projects":
+            projects = self.data.get('projects', [])
+            if projects:
+                project_list = []
+                for i, project in enumerate(projects[:3], 1):
+                    project_list.append(f"{i}. {project.get('name', 'Project')}: {project.get('description', 'Innovative solution')}")
+            
+                intros = [
+                    "Here are some of my key projects:",
+                    "I'm proud to showcase these projects:",
+                    "Let me highlight some of my favorite projects:",
+                    "Here's a selection of my recent work:"
+                ]
+                return f"{random.choice(intros)}\n\n" + "\n".join(project_list)
+            else:
+                return self._get_varied_response("projects")
+    
+        elif intent == "experience":
+            experience = self.data.get('experience', [])
+            if experience:
+                exp = experience[0]
+                base_responses = [
+                    f"I have internship experience at {exp.get('company', 'a tech company')} for {exp.get('duration', 'several months')}, where I gained valuable industry experience.",
+                    f"I've worked as an intern at {exp.get('company', 'a tech company')} for {exp.get('duration', 'several months')}, which gave me great hands-on experience.",
+                    f"My professional journey includes a {exp.get('duration', 'several months')} internship at {exp.get('company', 'a tech company')}, where I developed practical skills.",
+                    f"I gained valuable industry exposure through my {exp.get('duration', 'several months')} internship at {exp.get('company', 'a tech company')}."
+                ]
+                return random.choice(base_responses)
+            else:
+                return "I'm currently building my professional experience through projects and continuous learning in the tech industry."
+    
+        elif intent == "education":
+            education = self.data.get('education', {}).get('current', {})
+            base_responses = [
+                f"I'm currently pursuing {education.get('degree', 'my degree')} in {education.get('specialization', 'Computer Science')} at {education.get('college', 'my college')}, {education.get('university', 'my university')}.",
+                f"I'm studying {education.get('specialization', 'Computer Science')} for my {education.get('degree', 'degree')} at {education.get('college', 'my college')}, {education.get('university', 'my university')}.",
+                f"My academic journey involves pursuing {education.get('degree', 'my degree')} in {education.get('specialization', 'Computer Science')} from {education.get('college', 'my college')}, {education.get('university', 'my university')}.",
+                f"I'm currently enrolled in {education.get('degree', 'my degree')} program specializing in {education.get('specialization', 'Computer Science')} at {education.get('college', 'my college')}, {education.get('university', 'my university')}."
+            ]
+            return random.choice(base_responses)
+    
+        elif intent == "contact":
+            base_responses = [
+                "You can find my contact information and connect with me through the contact section of this portfolio website.",
+                "Feel free to reach out through the contact details available on this portfolio site!",
+                "I'd love to connect! Check out the contact section of this website for ways to get in touch.",
+                "You can contact me using the information provided in the contact section of this portfolio."
+            ]
+            return random.choice(base_responses)
+    
+        elif intent == "trading":
+            years = self.data.get('trading_experience', {}).get('years', '2+')
+            base_responses = [
+                f"Yes, I have {years} years of experience trading in stocks, cryptocurrency, and forex markets. It's taught me a lot about market analysis and risk management.",
+                f"I've been actively trading for {years} years across stocks, crypto, and forex markets. It's given me valuable insights into financial markets and analytical thinking.",
+                f"Trading has been a passion of mine for {years} years! I work with stocks, cryptocurrency, and forex, which has sharpened my analytical and decision-making skills.",
+                f"I have {years} years of hands-on trading experience in various markets including stocks, crypto, and forex. It's been an excellent complement to my technical skills."
+            ]
+            return random.choice(base_responses)
+    
+        elif intent == "inappropriate":
+            return self._get_varied_response("inappropriate")
+    
+        elif intent == "unclear":
+            return self._get_varied_response("unclear")
+    
+        elif intent == "irrelevant":
+            # Determine if it's a polite redirect or more direct redirect
+            polite_indicators = ["please", "could you", "would you", "can you", "help me"]
+            if any(indicator in user_input.lower() for indicator in polite_indicators):
+                response = self._get_varied_response("irrelevant_polite")
+            else:
+                response = self._get_varied_response("irrelevant_redirect")
+        
+            # Add a helpful suggestion
+            suggestions = [
+                "\n\nFor example, you could ask about:\n• My programming skills and technologies\n• Recent projects I've worked on\n• My educational background\n• My trading and market analysis experience",
+                "\n\nI'd be happy to discuss:\n• Technical expertise and tech stack\n• Portfolio projects and achievements\n• Professional experience and internships\n• AI/ML and development work",
+                "\n\nSome topics I can help with:\n• Software development experience\n• AI and machine learning projects\n• Trading and financial market insights\n• Educational background and qualifications",
+                "\n\nFeel free to ask about:\n• My coding skills and favorite technologies\n• Exciting projects I've built\n• My academic and professional journey\n• My experience in financial markets"
+            ]
+            return response + random.choice(suggestions)
+    
+        else:
+            # For general queries, check if it's somewhat related to portfolio
+            portfolio_keywords = ["career", "developer", "programming", "technology", "computer", "software", "coding", "tech"]
+            if any(keyword in user_input.lower() for keyword in portfolio_keywords):
+                return "I'd be happy to discuss my career in technology and software development! What specific aspect would you like to know about - my technical skills, projects, or professional experience?"
+            else:
+                # Use varied general redirect responses
+                return self._get_varied_response("general_redirect")
+
+    def _is_portfolio_related(self, user_input: str) -> bool:
+        """Determine if the query is portfolio-related with fuzzy matching for typos"""
+        portfolio_keywords = [
+            "sayees", "portfolio", "skills", "projects", "experience", "education", 
+            "name", "who", "what", "about", "tell me", "trading", "developer",
+            "programming", "technical", "software", "ai", "ml", "machine learning",
+            "internship", "college", "university", "contact", "hire", "recruiting",
+            "github", "code", "development", "technology", "career", "professional",
+            "crypto", "cryptocurrency", "forex", "stocks", "market", "analysis"
+        ]
+        
+        # Extract keywords from user input
+        input_keywords = self._extract_keywords(user_input)
+        
+        # Try fuzzy matching
+        for word in input_keywords:
+            matches = get_close_matches(word, portfolio_keywords, n=1, cutoff=0.8)
+            if matches:
+                return True
+                
+        return False
+
+    async def process_input(self, user_input: str) -> str:
+        """Process user input and generate appropriate response"""
+        try:
+            # Clean and validate input
+            user_input = user_input.strip()
+            if not user_input:
+                return "Please ask me something! I'm here to help."
+            
+            # Add to conversation history
+            self.conversation_history.append({"user": user_input, "timestamp": datetime.now()})
+            
+            # Classify intent first
+            intent = self._classify_intent(user_input)
+            
+            # Handle inappropriate or irrelevant queries immediately
+            if intent in ["inappropriate", "irrelevant", "unclear"]:
+                response = self._get_template_response(intent, user_input)
+            
+            # Check if this is portfolio-related
+            elif self._is_portfolio_related(user_input) or intent in [
+                "greeting", "name_intro", "skills", "projects", "experience", 
+                "education", "contact", "trading"
+            ]:
+                # Use template-based response for portfolio queries
+                response = self._get_template_response(intent, user_input)
+            
+            elif not self.model:
+                # No AI model available - redirect to portfolio topics
+                response = self._get_varied_response("general_redirect")
+            
+            else:
+                # Use AI model for general conversation with constraints
+                response = await self._generate_ai_response(user_input)
+            
+            # Add response to history
+            self.conversation_history.append({"bot": response, "timestamp": datetime.now()})
+            
+            # Keep history manageable
+            if len(self.conversation_history) > 20:
+                self.conversation_history = self.conversation_history[-20:]
+            
+            return response
+            
+        except Exception as e:
+            print(f"Error processing input: {e}")
+            return random.choice(self.response_templates["error"])
+
+    async def _generate_ai_response(self, user_input: str) -> str:
+        """Generate response using AI model with portfolio focus"""
+        try:
+            if not self.model:
+                return "I'm here to discuss my portfolio and professional background. What would you like to know about my skills or experience?"
+            
+            # Create a portfolio-focused prompt that constrains the AI
+            # Include recent conversation history for context
+            recent_history = self.conversation_history[-4:] if len(self.conversation_history) > 0 else []
+            history_text = ""
+            
+            for item in recent_history:
+                if "user" in item:
+                    history_text += f"User: {item['user']}\n"
+                elif "bot" in item:
+                    history_text += f"Assistant: {item['bot']}\n"
+            
+            # Create a more detailed system prompt to handle irrelevant queries better
+            prompt = f"""You are an AI assistant for a software developer's portfolio website named Muhammed Sayees.
+Your primary purpose is to provide information about Sayees's skills, projects, education, and professional experience.
+
+IMPORTANT INSTRUCTIONS:
+1. Always maintain a professional tone.
+2. For questions about Sayees's background, provide detailed information from your knowledge base.
+3. For irrelevant or off-topic questions, politely redirect the conversation back to Sayees's portfolio.
+4. Never provide information on controversial, political, or inappropriate topics.
+5. If you're unsure about specific details, focus on general information about Sayees's skills and experience.
+
+Recent conversation:
+{history_text}
+
+User: {user_input}
+Assistant:"""
+            
+            # Generate response
+            result = self.model(prompt, max_length=len(prompt) + 80, num_return_sequences=1)
+            
+            # Extract and clean response
+            response = result[0]['generated_text']
+            response = response[len(prompt):].strip()
+            
+            # Clean up response
+            response = re.sub(r'\s+', ' ', response)
+            
+            # If response is empty or too short, provide fallback
+            if not response or len(response) < 10:
+                return "I'm here to help you learn about my professional background. What would you like to know about my skills, projects, or experience?"
+            
+            # Ensure response doesn't exceed reasonable length
+            if len(response) > 250:
+                response = response[:250] + "..."
+            
+            # Check if the AI response is still off-topic and redirect if needed
+            if self._is_response_off_topic(response):
+                return random.choice(self.response_templates["irrelevant_polite"])
+            
+            return response
+            
+        except Exception as e:
+            print(f"AI generation error: {e}")
+            return "I'm designed to discuss my portfolio and professional experience. What aspect of my background interests you most?"
+
+    def _is_response_off_topic(self, response: str) -> bool:
+        """Check if the AI-generated response is off-topic"""
+        off_topic_indicators = [
+            "i don't know", "i'm not sure", "i can't help", "that's not something",
+            "i'm not able to", "i don't have information", "i'm not programmed",
+            "weather", "cooking", "movies", "sports", "politics", "religion"
+        ]
+        
+        response_lower = response.lower()
+        return any(indicator in response_lower for indicator in off_topic_indicators)
+
+    def get_conversation_history(self) -> List[Dict]:
+        """Return conversation history"""
+        return self.conversation_history
+
+    def clear_history(self):
+        """Clear conversation history"""
+        self.conversation_history = []
+        print("✅ Conversation history cleared!")
+
+    def get_portfolio_summary(self) -> str:
+        """Get a comprehensive portfolio summary"""
+        return self.context
+
+    def test_spelling_correction(self):
+        """Test the spelling correction functionality"""
+        test_cases = [
+            "wat are your skils?",  # what are your skills?
+            "tel me abut your projcts",  # tell me about your projects
+            "wher did you studie?",  # where did you study?
+            "wat is your experiance?",  # what is your experience?
+            "can you tel me abut tradng?",  # can you tell me about trading?
+        ]
+        
+        print("\n🧪 Testing Spelling Correction:")
+        print("=" * 40)
+        
+        for test_input in test_cases:
+            intent = self._classify_intent(test_input)
+            print(f"Input: '{test_input}' -> Intent: {intent}")
+        
+        print("=" * 40)
+
+
+# Enhanced main function for testing
+async def main():
+    """Main function for testing the chatbot"""
     try:
-        # Create bot instance
         bot = PortfolioBot()
         
-        # Enhanced welcome message
+        # Test spelling correction
+        bot.test_spelling_correction()
+        
         print("\n" + "="*50)
-        print(f"{bot._time_based_greeting()} {bot.role}")
-        print("="*50 + "\n")
-        print("Tips:")
-        print("1. Type 'help' to see available options")
-        print("2. Type 'exit' or 'quit' to end the conversation")
-        print("3. Ask about: education, projects, skills, experience\n")
-
-        # Main conversation loop
+        print("🤖 SAYEES PORTFOLIO BOT ACTIVATED!")
+        print("="*50)
+        print("✨ NEW FEATURES:")
+        print("• Improved spelling mistake handling")
+        print("• Better irrelevant query detection")
+        print("• Enhanced AI model integration")
+        print("• Fuzzy matching for typos")
+        print("\nAsk me about:")
+        print("• Skills and technical expertise")
+        print("• Projects and portfolio")
+        print("• Education and experience")
+        print("• Trading experience")
+        print("• Or just chat with me!")
+        print("\n⚠️  Note: I'm designed to focus on portfolio-related topics")
+        print("and will politely redirect other questions back to professional discussion.")
+        print("\nType 'quit', 'exit', or 'bye' to end the conversation")
+        print("Type 'clear' to clear conversation history")
+        print("Type 'summary' to get a full portfolio summary")
+        print("Type 'test' to run spelling correction tests")
+        print("-"*50 + "\n")
+        
         while True:
             try:
-                user_input = input("You: ").strip()
+                user_input = input("💬 You: ").strip()
                 
                 if not user_input:
                     continue
                     
-                if user_input.lower() in ['exit', 'quit', 'bye', 'goodbye']:
-                    print("\nBot: Thank you for your time! Goodbye!")
+                if user_input.lower() in ['quit', 'exit', 'bye', 'goodbye']:
+                    print("🤖 Bot: Thank you for your interest in my portfolio! Have a great day! 👋")
                     break
+                    
+                elif user_input.lower() == 'clear':
+                    bot.clear_history()
+                    continue
+                    
+                elif user_input.lower() in ['summary', 'portfolio summary']:
+                    print(f"🤖 Bot: {bot.get_portfolio_summary()}\n")
+                    continue
                 
-                response = bot.process_input(user_input)
-                print(f"\nBot: {response}\n")
+                elif user_input.lower() == 'test':
+                    bot.test_spelling_correction()
+                    continue
+                
+                # Get bot response
+                response = await bot.process_input(user_input)
+                print(f"🤖 Bot: {response}\n")
                 
             except KeyboardInterrupt:
-                print("\nBot: Goodbye! Have a great day!")
+                print("\n\n🤖 Bot: Goodbye! Thanks for chatting! 👋")
                 break
             except Exception as e:
-                print(f"\nBot: I apologize, but I encountered an error. Please try rephrasing your question.")
-                continue
-
+                print(f"⚠️  Error: {e}")
+                print("🤖 Bot: Sorry, I encountered an issue. Please try again.\n")
+                
     except Exception as e:
-        print(f"An error occurred: {str(e)}")
-        print("Please ensure sayees_data.json is in the same directory as this script.")
+        print(f"❌ Failed to initialize bot: {e}")
+        print("Please check your setup and try again.")
+
+
+# Run the chatbot if executed directly
+if __name__ == '__main__':
+    import asyncio
+    asyncio.run(main())

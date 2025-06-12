@@ -3,7 +3,7 @@ services:
     name: chatbot-api
     env: python
     buildCommand: ./build.sh
-    startCommand: python app.py
+    startCommand: uvicorn app:asgi_app --host 0.0.0.0 --port 10000
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.18

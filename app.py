@@ -5,25 +5,21 @@ import asyncio
 from asgiref.wsgi import WsgiToAsgi
 import os
 
-# Initialize Flask app
 app = Flask(__name__)
 CORS(app)
 
-# Initialize the bot
 bot = PortfolioBot()
-
 
 @app.route('/')
 def home():
     return jsonify({
         "status": "online",
-        "bot_name": bot.name,
+        "bot_name": bot.context['name'],
         "message": "Bot is running successfully!"
     })
 
-
 @app.route('/chatbot', methods=['POST'])
-async def chatbot():
+async def chatbot_route():
     data = request.get_json()
     message = data.get('message', '').strip()
 
@@ -42,11 +38,9 @@ async def chatbot():
             "response": "I encountered an error processing your request"
         }), 500
 
-
-# Convert WSGI app to ASGI
+# ASGI conversion
 asgi_app = WsgiToAsgi(app)
 
-# Don't run the server when imported by Gunicorn
 if __name__ == '__main__':
     import uvicorn
     port = int(os.environ.get("PORT", 5000))
