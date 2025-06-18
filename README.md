@@ -3,7 +3,7 @@
 This repository contains the backend code for my personal chatbot, integrated into my portfolio website:  
 🔗 [sayees.vercel.app](https://www.sayees.vercel.app)
 
-The chatbot is built using **Node.js** and **Express**, designed to handle chat interactions and API requests from the front-end (Next.js). It is hosted on **Render** for fast, always-on access and is connected to the portfolio as an embedded chat widget.
+The chatbot is built using **Flask** and **Gunicorn**, designed to handle chat interactions and API requests from the front-end (Next.js). It is hosted on **Render** for fast, always-on access and is connected to the portfolio as an embedded chat widget.
 
 ---
 
@@ -18,8 +18,8 @@ The chatbot is built using **Node.js** and **Express**, designed to handle chat 
 
 | Layer      | Tools & Technologies                |
 |------------|-------------------------------------|
-| Server     | [Node.js](https://nodejs.org/)      |
-| Framework  | [Express.js](https://expressjs.com/)|
+| Server     | [Flask Cors](https://pypi.org/project/flask-cors/)      |
+| Framework  | [Gunicorn](https://gunicorn.org/)|
 | Deployment | [Render](https://render.com/)       |
 | API Format | JSON over HTTP                      |
 | Integration| Next.js Frontend (via Fetch API)    |
