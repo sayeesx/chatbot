@@ -189,13 +189,15 @@ class PortfolioBot:
             skills = ', '.join(self.data.get('technical_skills', ['Programming']))
             trading_years = self.data.get('trading_experience', {}).get('years', '2+')
             
+            # Fix f-string error by using a variable for project lines
+            project_lines = [f"• {p.get('name', 'Project')}: {p.get('description', 'Innovative solution')}" for p in projects[:3]]
             context = (
                 f"I am {name}, a {role}.\n"
                 f"I'm currently studying {education.get('degree', 'Computer Science')} in {education.get('specialization', 'Technology')} at {education.get('college', 'my college')}, {education.get('university', 'my university')}.\n\n"
                 f"I'm based in {location.get('current', 'India')}, and my hometown is {location.get('hometown', 'Kerala')}.\n\n"
                 f"{'I have internship experience at ' + experience[0].get('company', 'a tech company') + ' for ' + experience[0].get('duration', 'several months') + '.' if experience else 'I am gaining experience through various projects.'}\n\n"
                 f"My key projects include:\n"
-                f"{chr(10).join([f'• {p.get('name', 'Project')}: {p.get('description', 'Innovative solution')}' for p in projects[:3]])}\n\n"
+                f"{chr(10).join(project_lines)}\n\n"
                 f"I'm fluent in {languages}, and my technical expertise includes {skills}.\n\n"
                 f"I also have {trading_years} years of experience in financial trading across stocks, cryptocurrency, and forex markets."
             )
@@ -524,8 +526,14 @@ class PortfolioBot:
             "politics", "religion", "controversial", "offensive", "illegal", "drugs", "violence"
         ]
         
+        # Handle personal questions with humor
+        personal_questions = [
+            "age", "how old", "birthday", "sex", "gender", "relationship", "girlfriend", "boyfriend", "married", "wife", "husband", "partner", "single", "dating", "crush", "gay", "lgbt", "sexuality"
+        ]
         if any(word in user_input_lower for word in inappropriate_words):
             return "inappropriate"
+        if any(word in user_input_lower for word in personal_questions):
+            return "personal_funny"
         
         # Extract keywords from user input
         input_keywords = self._extract_keywords(user_input)
@@ -668,10 +676,10 @@ class PortfolioBot:
         
         elif intent == "contact":
             base_responses = [
-                "You can find my contact information and connect with me through the contact section of this portfolio website.",
-                "Feel free to reach out through the contact details available on this portfolio site!",
-                "I'd love to connect! Check out the contact section of this website for ways to get in touch.",
-                "You can contact me using the information provided in the contact section of this portfolio."
+                "You can contact me via the contact page on this portfolio website.",
+                "Feel free to reach out through the contact page available on this site!",
+                "I'd love to connect! Please use the contact page on this website to get in touch.",
+                "You can contact me using the contact page provided in this portfolio."
             ]
             return random.choice(base_responses)
         
@@ -711,6 +719,23 @@ class PortfolioBot:
         elif intent == "compliment":
             return self._get_varied_response("compliments")
         
+
+        elif intent == "personal_funny":
+            respectful_personal = [
+                "I'm ageless—AI doesn't get wrinkles! 😄",
+                "My relationship status: It's complicated... with the internet!",
+                "I'm in a committed relationship with Python. 💻❤️",
+                "I don't have an age, but my code is always fresh!",
+                "I'm not single, I'm a single-threaded process!",
+                "I'm just a bunch of code—no dating apps for me!",
+                "I'm 100% digital, 0% drama!",
+                "I don't have a gender, but I do have a lot of RAM!",
+                "I'm not into relationships, but I love connecting APIs!",
+                "I'm here for your questions, not for romance! 😉",
+                "I'm as old as my last update!",
+                "I don't have a birthday, but every day is a good day to code!"
+            ]
+            return random.choice(respectful_personal)
         elif intent == "inappropriate":
             return self._get_varied_response("inappropriate")
         
